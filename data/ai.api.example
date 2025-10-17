@@ -1,0 +1,15 @@
+CEREBRAS_KEY = "your-cerebras-api-key-here"
+
+# Flashmail API Key for provisioning email accounts
+FLASHMAIL_CARD = "your-flashmail-api-key-here"
+
+CEREBRAS_DEMO = "
+# Example usage code here
+"
+
+GROQ_API="your-groq-api-key-here"
+
+GROQ_DEMO = "
+# Example usage code here
+"
+
