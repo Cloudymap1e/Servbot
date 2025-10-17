@@ -17,6 +17,52 @@ A comprehensive, production-ready email automation tool for fetching and extract
 pip install -r requirements.txt
 ```
 
+## Usage Options
+
+Servbot can be used in two ways:
+
+1. **Interactive CLI** (NEW!) - Command-line interface for easy management
+2. **Python API** - Programmatic integration in your code
+
+### Interactive CLI
+
+Start the interactive command-line interface:
+
+```bash
+python -m servbot
+```
+
+Or use the startup scripts:
+```bash
+# Windows
+run.bat
+
+# Linux/Mac
+./run.sh
+```
+
+The CLI provides commands for:
+- Managing email accounts (`accounts`, `provision`, `add`)
+- Checking verification codes (`check`, `check-all`, `inbox`)
+- Flashmail operations (`balance`, `inventory`)
+- Database queries (`database`)
+
+**See [CLI_GUIDE.md](CLI_GUIDE.md) for complete documentation.**
+
+### Python API
+
+Import and use Servbot in your Python code:
+
+```python
+from servbot import fetch_verification_codes
+
+verifications = fetch_verification_codes(
+    imap_server="imap.gmail.com",
+    username="your-email@gmail.com",
+    password="your-password"
+)
+```
+
 ## Quick Start
 
 ### Basic Usage
@@ -75,7 +121,10 @@ if result:
 ```
 servbot/
 ├── __init__.py           # Public API exports
+├── __main__.py           # CLI entry point (python -m servbot)
 ├── api.py                # High-level API functions
+├── cli.py                # Interactive CLI implementation
+├── main.py               # Direct CLI entry point
 ├── config.py             # Configuration loader
 │
 ├── core/                 # Core business logic
