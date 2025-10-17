@@ -40,6 +40,8 @@ def init_db() -> None:
             source TEXT,             -- flashmail | file | manual | other
             card TEXT,               -- source API card if any
             imap_server TEXT,
+            refresh_token TEXT,      -- Graph API OAuth refresh token
+            client_id TEXT,          -- Graph API OAuth client ID
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             last_seen_at TEXT
         );
@@ -113,7 +115,7 @@ def infer_type_from_email(email: str) -> str:
     return "other"
 
 
-def upsert_account(*, email: str, password: str = "", type: Optional[str] = None, source: Optional[str] = None, card: Optional[str] = None, imap_server: Optional[str] = None) -> int:
+def upsert_account(*, email: str, password: str = "", type: Optional[str] = None, source: Optional[str] = None, card: Optional[str] = None, imap_server: Optional[str] = None, refresh_token: Optional[str] = None, client_id: Optional[str] = None) -> int:
     if not email:
         raise ValueError("email is required")
     acc_type = type or infer_type_from_email(email)
@@ -122,17 +124,19 @@ def upsert_account(*, email: str, password: str = "", type: Optional[str] = None
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO accounts(email, password, type, source, card, imap_server)
-        VALUES(?,?,?,?,?,?)
+        INSERT INTO accounts(email, password, type, source, card, imap_server, refresh_token, client_id)
+        VALUES(?,?,?,?,?,?,?,?)
         ON CONFLICT(email) DO UPDATE SET
             password=excluded.password,
             type=COALESCE(excluded.type, accounts.type),
             source=COALESCE(excluded.source, accounts.source),
             card=COALESCE(excluded.card, accounts.card),
-            imap_server=COALESCE(excluded.imap_server, accounts.imap_server)
+            imap_server=COALESCE(excluded.imap_server, accounts.imap_server),
+            refresh_token=COALESCE(excluded.refresh_token, accounts.refresh_token),
+            client_id=COALESCE(excluded.client_id, accounts.client_id)
         ;
         """,
-        (email, password, acc_type, source, card, imap_server),
+        (email, password, acc_type, source, card, imap_server, refresh_token, client_id),
     )
     conn.commit()
     cur.execute("SELECT id FROM accounts WHERE email=?", (email,))
@@ -304,7 +308,7 @@ def get_accounts(source: Optional[str] = None) -> List[Dict[str, Any]]:
     """Retrieve accounts from the database, optionally filtered by source."""
     conn = _connect()
     cur = conn.cursor()
-    query = "SELECT id, email, password, type, source, card, imap_server, created_at, last_seen_at FROM accounts"
+    query = "SELECT id, email, password, type, source, card, imap_server, refresh_token, client_id, created_at, last_seen_at FROM accounts"
     params: List[Any] = []
     if source:
         query += " WHERE source = ?"

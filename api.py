@@ -16,6 +16,7 @@ from .core.verification import (
 )
 from .clients import IMAPClient, GraphClient, FlashmailClient
 from .data import ensure_db, upsert_account, find_verification, get_accounts, get_latest_verifications
+from .constants import FLASHMAIL_REFRESH_TOKEN, FLASHMAIL_CLIENT_ID
 
 
 # Initialize database on import
@@ -96,7 +97,8 @@ def provision_flashmail_account(
         account = accounts[0]
         imap_server = FlashmailClient.infer_imap_server(account.email)
         
-        # Save to database
+        # Save complete account credentials (email, password, refresh_token, client_id)
+        # All credentials are stored together in the accounts table
         upsert_account(
             email=account.email,
             password=account.password,
@@ -104,6 +106,8 @@ def provision_flashmail_account(
             source="flashmail",
             card=card,
             imap_server=imap_server,
+            refresh_token=FLASHMAIL_REFRESH_TOKEN,
+            client_id=FLASHMAIL_CLIENT_ID,
         )
         
         # Fetch verification
@@ -211,8 +215,8 @@ def list_database(source: Optional[str] = None) -> Dict[str, any]:
         conn = _connect()
         cur = conn.cursor()
         
-        # Get accounts
-        accounts_query = "SELECT id, email, password, type, source, card, imap_server, created_at, last_seen_at FROM accounts"
+        # Get accounts (with ALL credentials)
+        accounts_query = "SELECT id, email, password, type, source, card, imap_server, refresh_token, client_id, created_at, last_seen_at FROM accounts"
         params = []
         if source:
             accounts_query += " WHERE source = ?"

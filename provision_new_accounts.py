@@ -107,8 +107,19 @@ def provision_accounts(quantity: int = 2, account_type: str = "outlook"):
                 # For Flashmail accounts, they provide email and password
                 # The refresh_token and client_id are Microsoft OAuth credentials
                 # that are the same for all accounts from this API
-                line = f"{acc.email}----{acc.password}----M.C555_BAY.0.U.-CuM67nex5EBQ!GY0IMwAOsN0wHFlWi9YWNwFTS2mzmABTJw4i8BtfmVWXjVq2kH9i65E4qOMvr72P9GwhSVTa7nvrEJZqQzsCfHtANNdncOtu*MueuG6MGVTUGlRxV21ojrNHLRyLBXlnycQ!sBnjZTq1Ws4SFNennegb6ANEp3Fk9RfIGyx2O4brysLRTRG9rgzIzifUND2aJrb5xyWSOolE1wqr7nYICzgbXh4pdeiSdmA0KmFO2ogiPg4Dnh15lzDUXP597GsiBUj7Kc*3IpHXC!4aA9Ft8a2uyEAdzC2iIY39PXydNqfiEDtOeb4KvThzKx3GilBqRURL2UboxZ0POmcvKywSpm*eU!5Z9AnQD2vJQmpmAc9WlV538ZkWv8lR9R9ubkhf1T4G324wlA$----8b4ba9dd-3ea5-4e5f-86f1-ddba2230dcf2\n"
+                line = f"{acc.email}----{acc.password}----{FLASHMAIL_REFRESH_TOKEN}----{FLASHMAIL_CLIENT_ID}\n"
                 f.write(line)
+                
+                # Save complete account credentials to database
+                upsert_account(
+                    email=acc.email,
+                    password=acc.password,
+                    type=acc.account_type,
+                    source="flashmail",
+                    card=card,
+                    refresh_token=FLASHMAIL_REFRESH_TOKEN,
+                    client_id=FLASHMAIL_CLIENT_ID,
+                )
                 
                 print(f"\n   Account {i}:")
                 print(f"   Email: {acc.email}")
