@@ -1,0 +1,15 @@
+# pyproject.toml for tool configuration only (no packaging metadata)
+# Keeps runtime unchanged; configures Black formatting only.
+[tool.black]
+line-length = 100
+include = '\\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | build
+  | dist
+  | servbot/data
+)/
+'''

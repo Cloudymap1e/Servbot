@@ -35,10 +35,16 @@ env/
 .DS_Store
 
 # Sensitive Data - DO NOT COMMIT
+# Legacy path (pre-refactor)
 data/ai.api
+# New path under package
+servbot/data/ai.api
+
+# Local databases
 *.db
 *.sqlite
 *.sqlite3
+servbot/data/*.db
 
 # Test artifacts
 .pytest_cache/

@@ -1,0 +1,21 @@
+# Ruff configuration (non-blocking)
+# Provides modern lint feedback without affecting runtime or build.
+line-length = 100
+
+# Enable common rule sets: pycodestyle (E), pyflakes (F), warnings (W), import sorting (I)
+select = ["E", "F", "W", "I"]
+
+# Align with Black; avoid conflicting style warnings
+ignore = [
+  "E203",  # whitespace before ':'
+  "E501",  # line length (Black manages formatting)
+]
+
+# Avoid scanning generated or data directories
+extend-exclude = [
+  "servbot/data",
+  ".venv",
+  "venv",
+  "build",
+  "dist",
+]
