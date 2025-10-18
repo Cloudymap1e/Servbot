@@ -180,6 +180,8 @@ class FlashmailClient:
                         continue
                     email = item.get("email") or item.get("username") or ""
                     password = item.get("password") or item.get("pass") or ""
+                    rt = item.get("refresh_token") or item.get("refreshToken")
+                    cid = item.get("client_id") or item.get("clientId")
                     if email and password:
                         accounts.append(
                             EmailAccount(
@@ -188,12 +190,16 @@ class FlashmailClient:
                                 account_type=account_type,
                                 source="flashmail",
                                 card=self.card,
+                                refresh_token=rt,
+                                client_id=cid,
                             )
                         )
             elif isinstance(data, dict) and "accounts" in data:
                 for item in data.get("accounts", []):
                     email = item.get("email")
                     password = item.get("password")
+                    rt = item.get("refresh_token") or item.get("refreshToken")
+                    cid = item.get("client_id") or item.get("clientId")
                     if email and password:
                         accounts.append(
                             EmailAccount(
@@ -202,6 +208,8 @@ class FlashmailClient:
                                 account_type=account_type,
                                 source="flashmail",
                                 card=self.card,
+                                refresh_token=rt,
+                                client_id=cid,
                             )
                         )
             
@@ -225,9 +233,11 @@ class FlashmailClient:
             elif "," in line:
                 parts = line.split(",", 1)
             
-            if len(parts) == 2:
+            if len(parts) >= 2:
                 email = parts[0].strip()
                 password = parts[1].strip()
+                rt = parts[2].strip() if len(parts) >= 3 else None
+                cid = parts[3].strip() if len(parts) >= 4 else None
                 if email and password:
                     accounts.append(
                         EmailAccount(
@@ -236,6 +246,8 @@ class FlashmailClient:
                             account_type=account_type,
                             source="flashmail",
                             card=self.card,
+                            refresh_token=rt,
+                            client_id=cid,
                         )
                     )
         

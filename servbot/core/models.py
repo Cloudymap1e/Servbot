@@ -45,6 +45,8 @@ class EmailAccount:
         source: Where account came from (e.g., "flashmail", "manual")
         imap_server: IMAP server address
         card: Optional API card ID (for Flashmail accounts)
+        refresh_token: Optional Microsoft Graph OAuth refresh token (per-account)
+        client_id: Optional Microsoft Graph OAuth client ID (per-account)
     """
     email: str
     password: str
@@ -52,6 +54,8 @@ class EmailAccount:
     source: str = "manual"
     imap_server: Optional[str] = None
     card: Optional[str] = None
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
 
 
 @dataclass

@@ -38,7 +38,7 @@ def init_db() -> None:
             password TEXT,
             type TEXT,               -- outlook | hotmail | other
             source TEXT,             -- flashmail | file | manual | other
-            card TEXT,               -- source API card if any
+            card TEXT,               -- DEPRECATED: do not store API cards in DB
             imap_server TEXT,
             refresh_token TEXT,      -- Microsoft Graph API OAuth refresh token
             client_id TEXT,          -- Microsoft Graph API OAuth client ID
@@ -100,6 +100,24 @@ def init_db() -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_messages_mailbox ON messages(mailbox);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_verifications_message ON verifications(message_id);")
 
+    # New table: flashmail_cards metadata (no secrets stored)
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS flashmail_cards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            alias TEXT UNIQUE NOT NULL,
+            storage TEXT DEFAULT 'keyring',
+            last_known_balance INTEGER DEFAULT 0,
+            last_checked_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            is_default INTEGER DEFAULT 0
+        );
+        """
+    )
+
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_flashmail_cards_alias ON flashmail_cards(alias);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_flashmail_cards_default ON flashmail_cards(is_default);")
+
     conn.commit()
     conn.close()
 
@@ -109,6 +127,7 @@ def ensure_db() -> None:
     init_db()
     migrate_email_txt_to_db()
     migrate_graph_accounts_to_accounts()
+    migrate_normalize_flashmail_passwords()
 
 
 def infer_type_from_email(email: str) -> str:
@@ -153,6 +172,20 @@ def upsert_account(
         raise ValueError("email is required")
     acc_type = type or infer_type_from_email(email)
 
+    # Normalize Flashmail-style combined password if present: password----refresh_token----client_id
+    pw = password or ""
+    pw_clean = pw
+    rt = refresh_token
+    cid = client_id
+    if "----" in pw:
+        parts = [p.strip() for p in pw.split("----")]
+        if len(parts) >= 1:
+            pw_clean = parts[0]
+        if len(parts) >= 3:
+            # Only fill if not explicitly provided
+            rt = rt or parts[1]
+            cid = cid or parts[2]
+
     conn = _connect()
     cur = conn.cursor()
     
@@ -172,7 +205,7 @@ def upsert_account(
                 client_id=COALESCE(excluded.client_id, accounts.client_id)
             ;
             """,
-            (email, password, acc_type, source, card, imap_server, refresh_token, client_id),
+            (email, pw_clean, acc_type, source, card, imap_server, rt, cid),
         )
     else:
         # New mode: direct update allows NULL to clear values
@@ -190,7 +223,7 @@ def upsert_account(
                 client_id=excluded.client_id
             ;
             """,
-            (email, password, acc_type, source, card, imap_server, refresh_token, client_id),
+            (email, pw_clean, acc_type, source, card, imap_server, rt, cid),
         )
     
     conn.commit()
@@ -488,3 +521,131 @@ def migrate_graph_accounts_to_accounts() -> None:
         # Don't fail initialization if migration fails
         print(f"Warning: Graph accounts migration failed: {e}")
         pass
+
+
+def migrate_normalize_flashmail_passwords() -> None:
+    """Normalize accounts.password to store only the true password for Flashmail.
+
+    If accounts.password contains the combined format
+    "password----refresh_token----client_id", split and persist:
+    - accounts.password = password
+    - accounts.refresh_token = refresh_token (if empty)
+    - accounts.client_id = client_id (if empty)
+    """
+    try:
+        conn = _connect()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT email, password, refresh_token, client_id
+            FROM accounts
+            WHERE password LIKE '%----%'
+            """
+        )
+        rows = cur.fetchall()
+        updated = 0
+        for email, pw, rt, cid in rows:
+            if not pw or '----' not in pw:
+                continue
+            parts = [p.strip() for p in pw.split('----')]
+            pw_clean = parts[0] if parts else pw
+            new_rt = rt or (parts[1] if len(parts) >= 2 else None)
+            new_cid = cid or (parts[2] if len(parts) >= 3 else None)
+            cur.execute(
+                """
+                UPDATE accounts
+                SET password = ?,
+                    refresh_token = COALESCE(?, refresh_token),
+                    client_id = COALESCE(?, client_id)
+                WHERE email = ?
+                """,
+                (pw_clean, new_rt, new_cid, email)
+            )
+            updated += 1
+        conn.commit()
+        conn.close()
+        if updated:
+            print(f"Normalized Flashmail-style passwords for {updated} account(s).")
+    except Exception as e:
+        # Do not fail initialization
+        print(f"Warning: Flashmail password normalization failed: {e}")
+        return
+
+
+# Flashmail cards metadata (no secrets)
+
+def add_flashmail_card(alias: str, storage: str = 'keyring') -> bool:
+    """Add a flashmail card metadata row if not exists."""
+    if not alias:
+        return False
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO flashmail_cards(alias, storage)
+        VALUES(?, ?)
+        ON CONFLICT(alias) DO UPDATE SET storage=excluded.storage
+        """,
+        (alias, storage),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def list_flashmail_cards() -> List[Dict[str, Any]]:
+    """List all flashmail card aliases and metadata."""
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT alias, storage, last_known_balance, last_checked_at, is_default, created_at
+        FROM flashmail_cards
+        ORDER BY is_default DESC, alias ASC
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def set_default_flashmail_card(alias: str) -> bool:
+    if not alias:
+        return False
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute("UPDATE flashmail_cards SET is_default = 0")
+    cur.execute("UPDATE flashmail_cards SET is_default = 1 WHERE alias = ?", (alias,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def update_flashmail_card_balance(alias: str, balance: int, checked_at: Optional[str] = None) -> bool:
+    if not alias:
+        return False
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE flashmail_cards
+        SET last_known_balance = ?,
+            last_checked_at = COALESCE(?, datetime('now'))
+        WHERE alias = ?
+        """,
+        (int(balance), checked_at, alias),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def remove_flashmail_card(alias: str) -> bool:
+    if not alias:
+        return False
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM flashmail_cards WHERE alias = ?", (alias,))
+    conn.commit()
+    conn.close()
+    return True

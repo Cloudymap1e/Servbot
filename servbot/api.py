@@ -16,7 +16,6 @@ from .core.verification import (
 )
 from .clients import IMAPClient, GraphClient, FlashmailClient
 from .data import ensure_db, upsert_account, find_verification, get_accounts, get_latest_verifications
-from .constants import FLASHMAIL_REFRESH_TOKEN, FLASHMAIL_CLIENT_ID
 
 
 # Initialize database on import
@@ -107,8 +106,8 @@ def provision_flashmail_account(
             source="flashmail",
             card=card,
             imap_server=imap_server,
-            refresh_token=FLASHMAIL_REFRESH_TOKEN,
-            client_id=FLASHMAIL_CLIENT_ID,
+            refresh_token=account.refresh_token,
+            client_id=account.client_id,
             update_only_if_provided=False,  # Allow direct updates
         )
         

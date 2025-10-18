@@ -226,13 +226,15 @@ class GraphClient(EmailClient):
             return None
         
         try:
+            # Per Microsoft identity platform v2.0, the "scope" parameter is optional on
+            # refresh_token redemption. If omitted, the originally granted scopes are reused.
+            # Avoid using ".default" here (reserved for client credentials/app perms).
             response = requests.post(  # type: ignore
                 GRAPH_TOKEN_URL,
                 data={
                     "client_id": self.client_id,
                     "grant_type": "refresh_token",
                     "refresh_token": self.refresh_token,
-                    "scope": GRAPH_API_SCOPE,
                 },
                 timeout=10,
             )
@@ -300,13 +302,14 @@ class GraphClient(EmailClient):
             GraphClient instance or None if token refresh fails
         """
         try:
+            # For delegated flows, omit "scope" during refresh so previously granted
+            # scopes are reused. Do NOT use ".default" here.
             response = requests.post(  # type: ignore
                 GRAPH_TOKEN_URL,
                 data={
                     "client_id": client_id,
                     "grant_type": "refresh_token",
                     "refresh_token": refresh_token,
-                    "scope": GRAPH_API_SCOPE,
                 },
                 timeout=10,
             )

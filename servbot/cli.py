@@ -29,9 +29,27 @@ from servbot import (
     get_flashmail_inventory,
 )
 from servbot.config import load_flashmail_card
-from servbot.data.database import get_accounts, upsert_account
+from servbot.data.database import (
+    get_accounts,
+    upsert_account,
+    list_flashmail_cards,
+    add_flashmail_card,
+    set_default_flashmail_card,
+    update_flashmail_card_balance,
+    remove_flashmail_card,
+)
 from servbot.clients import FlashmailClient
 from servbot.constants import FLASHMAIL_REFRESH_TOKEN, FLASHMAIL_CLIENT_ID
+from servbot.flashmail_cards import (
+    register_card as cards_register,
+    list_cards as cards_list,
+    set_default as cards_set_default,
+    remove_card as cards_remove,
+    update_balance as cards_update_balance,
+    pick_card as cards_pick,
+)
+from servbot.secure_store import get_secret, set_secret, FLASHMAIL_SERVICE, redact
+from servbot.logging_config import setup_logging
 
 
 class ServbotCLI:
@@ -44,6 +62,8 @@ class ServbotCLI:
         
     def run(self):
         """Main CLI loop."""
+        # Initialize logging with redaction
+        setup_logging(debug=False)
         self.print_banner()
         
         while self.running:
@@ -107,6 +127,10 @@ class ServbotCLI:
             self.cmd_add_account(args)
         elif cmd == "database" or cmd == "db":
             self.cmd_database()
+        elif cmd == "cards":
+            self.cmd_cards(args)
+        elif cmd == "imap-test":
+            self.cmd_imap_test(args)
         else:
             print(f"Unknown command: {cmd}")
             print("Type 'help' for available commands.")
@@ -135,6 +159,14 @@ class ServbotCLI:
         print("  inventory             - Check available Flashmail account stock")
         print("\nDatabase:")
         print("  database              - Show complete database contents")
+        print("\nFlashmail Cards (secure):")
+        print("  cards                 - List card aliases and balances")
+        print("  cards add <alias>     - Add a card (secure prompt)")
+        print("  cards rm <alias>      - Remove card metadata (optionally delete secret)")
+        print("  cards default <alias> - Set default card alias")
+        print("  cards balance         - Refresh and display balances for all cards")
+        print("\nDiagnostics:")
+        print("  imap-test <email>     - Test IMAP connectivity with sanitized logs")
         print("\nGeneral:")
         print("  help                  - Show this help message")
         print("  exit/quit             - Exit the program")
@@ -229,17 +261,32 @@ class ServbotCLI:
             print('Format: FLASHMAIL_CARD = "your_api_key"')
             return
         
-        account_type = args[0] if args else "outlook"
-        
-        if account_type not in ["outlook", "hotmail"]:
-            print(f"Invalid account type: {account_type}")
-            print("Valid types: outlook, hotmail")
-            return
-        
+        account_type = args[0] if args and args[0] in ["outlook", "hotmail"] else "outlook"
+
         print(f"\nProvisioning {account_type} account from Flashmail...")
         
         try:
-            client = FlashmailClient(self.flashmail_card)
+            # Choose card alias if available
+            alias = None
+            if len(args) >= 2 and args[0] in ("outlook", "hotmail") and args[1] != "":
+                alias = args[1]
+            elif cards_list():
+                alias = cards_pick(min_required_credits=1)
+            
+            if alias:
+                client_obj = cards_register  # just to satisfy type checker; not used
+                client = None
+                from servbot.flashmail_cards import get_client_by_alias
+                client = get_client_by_alias(alias)
+                if not client:
+                    print(f"Failed to load card alias: {alias}")
+                    return
+            else:
+                # Fallback to single configured card
+                if not self.flashmail_card:
+                    print("Flashmail API card not configured (data/ai.api)")
+                    return
+                client = FlashmailClient(self.flashmail_card)
             accounts = client.fetch_accounts(quantity=1, account_type=account_type)
             
             if not accounts:
@@ -249,8 +296,8 @@ class ServbotCLI:
             account = accounts[0]
             imap_server = FlashmailClient.infer_imap_server(account.email)
             
-            # Save to database with all credentials (password + Microsoft Graph OAuth)
-            # Flashmail accounts support both IMAP and Microsoft Graph API
+            # Save to database with per-account credentials (password + per-account Graph OAuth)
+            # Flashmail accounts should include per-account refresh_token and client_id
             upsert_account(
                 email=account.email,
                 password=account.password,
@@ -258,8 +305,8 @@ class ServbotCLI:
                 source="flashmail",
                 card=self.flashmail_card,
                 imap_server=imap_server,
-                refresh_token=FLASHMAIL_REFRESH_TOKEN,
-                client_id=FLASHMAIL_CLIENT_ID,
+                refresh_token=account.refresh_token,
+                client_id=account.client_id,
                 update_only_if_provided=False,  # Direct update mode
             )
             
@@ -270,7 +317,10 @@ class ServbotCLI:
             print(f"Password: {account.password}")
             print(f"Type:     {account.account_type}")
             print(f"IMAP:     {imap_server}")
-            print(f"\nMicrosoft Graph API: Enabled (OAuth credentials saved)")
+            # Print credentials as requested (WARNING: sensitive)
+            print("\nMicrosoft Graph API credentials (per-account):")
+            print(f"  refresh_token: {account.refresh_token}")
+            print(f"  client_id    : {account.client_id}")
             print("  → Supports both IMAP and Graph API for email fetching")
             print("\nAccount saved to database.")
             print("=" * 70)
@@ -377,8 +427,19 @@ class ServbotCLI:
             return
         
         try:
-            balance = get_flashmail_balance(self.flashmail_card)
-            print(f"\nFlashmail API Balance: {balance} credits")
+            # If cards module has aliases, show all balances; else fallback to single card
+            cards = cards_list()
+            if cards:
+                print("\nFlashmail API Balances:")
+                for c in cards:
+                    alias = c['alias']
+                    bal = cards_update_balance(alias)
+                    bal = bal if bal is not None else c.get('last_known_balance', 0)
+                    mark = " [DEFAULT]" if c.get('is_default') else ""
+                    print(f"  • {alias}{mark}: {bal} credits")
+            else:
+                balance = get_flashmail_balance(self.flashmail_card)
+                print(f"\nFlashmail API Balance: {balance} credits")
         except Exception as e:
             print(f"Error checking balance: {e}")
     
@@ -485,7 +546,10 @@ class ServbotCLI:
         
         # Determine IMAP server if not set
         if not imap_server:
-            if 'outlook' in email.lower() or 'hotmail' in email.lower() or 'live' in email.lower():
+            # Prefer Flashmail proxy for Flashmail-sourced accounts
+            if (account.get('source') or '').lower() == 'flashmail':
+                imap_server = "imap.shanyouxiang.com"
+            elif 'outlook' in email.lower() or 'hotmail' in email.lower() or 'live' in email.lower():
                 imap_server = "outlook.office365.com"
             elif 'gmail' in email.lower():
                 imap_server = "imap.gmail.com"
@@ -581,6 +645,143 @@ class ServbotCLI:
             print(f"Error fetching codes: {e}")
             import traceback
             traceback.print_exc()
+
+    def cmd_cards(self, args: List[str]):
+        """Manage Flashmail card aliases securely.
+
+        Usage:
+          cards                      - list cards
+          cards add <alias>          - add card (secure prompt)
+          cards rm <alias> [--delete-secret]
+          cards default <alias>
+          cards balance              - refresh and display balances
+        """
+        if not args:
+            # List cards
+            rows = cards_list()
+            if not rows:
+                print("\nNo cards found. Use 'cards add <alias>' to register.")
+                return
+            print("\nFlashmail Cards:")
+            for r in rows:
+                mark = " [DEFAULT]" if r.get('is_default') else ""
+                bal = r.get('last_known_balance', 0)
+                checked = r.get('last_checked_at') or 'never'
+                print(f"  • {r['alias']}{mark} — balance={bal}, last_checked={checked}")
+            return
+
+        sub = args[0]
+        if sub == 'add' and len(args) >= 2:
+            alias = args[1]
+            import getpass
+            try:
+                secret = getpass.getpass(prompt=f"Enter Flashmail card for alias '{alias}': ")
+                if not secret:
+                    print("No secret entered.")
+                    return
+                cards_register(alias, secret, set_default=False)
+                print(f"Added card alias: {alias}")
+            except Exception as e:
+                print(f"Error adding card: {e}")
+            return
+        if sub == 'rm' and len(args) >= 2:
+            alias = args[1]
+            delete_secret = '--delete-secret' in args[2:]
+            try:
+                cards_remove(alias, delete_secret=delete_secret)
+                print(f"Removed card alias: {alias}")
+            except Exception as e:
+                print(f"Error removing card: {e}")
+            return
+        if sub == 'default' and len(args) >= 2:
+            alias = args[1]
+            try:
+                cards_set_default(alias)
+                print(f"Default card set to: {alias}")
+            except Exception as e:
+                print(f"Error setting default: {e}")
+            return
+        if sub == 'balance':
+            try:
+                rows = cards_list()
+                if not rows:
+                    print("No cards found.")
+                    return
+                print("\nUpdating balances...")
+                for r in rows:
+                    alias = r['alias']
+                    bal = cards_update_balance(alias)
+                    mark = " [DEFAULT]" if r.get('is_default') else ""
+                    print(f"  • {alias}{mark}: {bal if bal is not None else r.get('last_known_balance', 0)} credits")
+            except Exception as e:
+                print(f"Error updating balances: {e}")
+            return
+
+        print("Unknown 'cards' usage. Type 'help' for commands.")
+
+    def cmd_imap_test(self, args: List[str]):
+        """Test IMAP connectivity with sanitized output/logging.
+
+        Usage: imap-test <email> [--no-ssl] [--limit 5] [--timeout 15]
+        """
+        if not args:
+            print("Usage: imap-test <email> [--no-ssl] [--limit 5] [--timeout 15]")
+            return
+        email = args[0]
+        no_ssl = '--no-ssl' in args
+        limit = 5
+        timeout = 20
+        for i, a in enumerate(args):
+            if a == '--limit' and i + 1 < len(args):
+                try:
+                    limit = int(args[i+1])
+                except ValueError:
+                    pass
+            if a == '--timeout' and i + 1 < len(args):
+                try:
+                    timeout = int(args[i+1])
+                except ValueError:
+                    pass
+        # Find account
+        accounts = get_accounts()
+        acc = next((x for x in accounts if x['email'].lower() == email.lower()), None)
+        if not acc:
+            print(f"Account not found: {email}")
+            return
+        server = acc.get('imap_server') or ('imap.shanyouxiang.com' if (acc.get('source') or '').lower() == 'flashmail' else 'outlook.office365.com')
+        password = acc.get('password') or ''
+        pw_len = len(password or '')
+        print(f"Testing IMAP for {email}\nServer: {server}\nPassword length: {pw_len}")
+        from servbot.clients import IMAPClient
+        import time
+        # Try SSL 993 unless --no-ssl
+        tried = False
+        if not no_ssl:
+            try:
+                t0 = time.time()
+                client = IMAPClient(server, email, password, port=993, use_ssl=True)
+                msgs = client.fetch_messages(folder='INBOX', unseen_only=False, limit=limit)
+                dt_ms = int((time.time()-t0)*1000)
+                print(f"SSL 993: OK ({len(msgs)} messages) in {dt_ms}ms")
+                for i, m in enumerate(msgs[:limit], 1):
+                    print(f"  {i}. {m.subject} — {m.from_addr}")
+                tried = True
+            except Exception as e:
+                print(f"SSL 993 failed: {e}")
+        # Try 143 no SSL
+        try:
+            t0 = time.time()
+            client = IMAPClient(server, email, password, port=143, use_ssl=False)
+            msgs = client.fetch_messages(folder='INBOX', unseen_only=False, limit=limit)
+            dt_ms = int((time.time()-t0)*1000)
+            print(f"No-SSL 143: OK ({len(msgs)} messages) in {dt_ms}ms")
+            for i, m in enumerate(msgs[:limit], 1):
+                print(f"  {i}. {m.subject} — {m.from_addr}")
+                tried = True
+        except Exception as e:
+            print(f"No-SSL 143 failed: {e}")
+        if not tried:
+            print("IMAP test failed for both ports.")
 
 
 def main():
