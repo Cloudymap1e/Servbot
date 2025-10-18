@@ -125,7 +125,8 @@ class ServbotCLI:
         print("AVAILABLE COMMANDS")
         print("=" * 70)
         print("\nAccount Management:")
-        print("  accounts              - List all email accounts in database")
+        print("  accounts [-v]         - List all email accounts in database")
+        print("                          Use -v for detailed credential view")
         print("  provision [type]      - Provision new account (outlook/hotmail)")
         print("  add <email> <pass>    - Add account manually to database")
         print("\nVerification Checking:")
@@ -147,8 +148,16 @@ class ServbotCLI:
         
         Args:
             args: Optional source filter (e.g., 'flashmail', 'file')
+                 Use 'verbose' or '-v' for detailed view
         """
-        source = args[0] if args else None
+        source = None
+        verbose = False
+        
+        for arg in args:
+            if arg.lower() in ['verbose', '-v', '--verbose']:
+                verbose = True
+            else:
+                source = arg
         
         try:
             accounts = get_accounts(source=source)
@@ -163,21 +172,50 @@ class ServbotCLI:
             print(f"EMAIL ACCOUNTS ({len(accounts)} total)")
             if source:
                 print(f"Filtered by source: {source}")
+            if verbose:
+                print("DETAILED VIEW")
             print("=" * 70)
             
             for i, acc in enumerate(accounts, 1):
                 print(f"\n{i}. {acc['email']}")
                 print(f"   Type: {acc.get('type', 'N/A')}")
                 print(f"   Source: {acc.get('source', 'N/A')}")
+                
+                if acc.get('password'):
+                    pw_len = len(acc['password'])
+                    print(f"   Password: {'*' * 10} ({pw_len} chars)")
+                
                 if acc.get('imap_server'):
                     print(f"   IMAP Server: {acc['imap_server']}")
+                
                 if acc.get('created_at'):
                     print(f"   Created: {acc['created_at']}")
-                # Show if Graph API credentials are available
-                if acc.get('refresh_token') and acc.get('client_id'):
-                    print(f"   Graph API: ✓ Configured")
+                
+                # Graph API credentials
+                has_refresh = bool(acc.get('refresh_token'))
+                has_client = bool(acc.get('client_id'))
+                
+                if verbose:
+                    print(f"\n   Credentials Status:")
+                    print(f"     Password: {'YES' if acc.get('password') else 'NO'} ({len(acc.get('password', ''))} chars)")
+                    print(f"     Refresh Token: {'YES' if has_refresh else 'NO'} ({len(acc.get('refresh_token', ''))} chars)")
+                    print(f"     Client ID: {'YES' if has_client else 'NO'} ({len(acc.get('client_id', ''))} chars)")
+                    
+                    if has_client:
+                        print(f"       Client ID: {acc['client_id']}")
+                    if has_refresh:
+                        rt = acc['refresh_token']
+                        print(f"       Refresh Token: {rt[:30]}...{rt[-20:]}")
+                
+                # Simple status
+                if has_refresh and has_client:
+                    print(f"   Graph API: [OK] Configured")
+                else:
+                    print(f"   Graph API: [NO] Not configured")
             
             print("=" * 70)
+            if not verbose:
+                print("Use 'accounts -v' for detailed credential information")
             
         except Exception as e:
             print(f"Error listing accounts: {e}")
@@ -455,15 +493,56 @@ class ServbotCLI:
         print(f"Connecting to {imap_server}...")
         
         try:
+            # First, check what messages are in the database to show fetching status
+            from servbot.data.database import _connect
+            conn = _connect()
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM messages WHERE mailbox = ?", (email,))
+            before_count = cur.fetchone()[0]
+            conn.close()
+            
             # Fetch verification codes
             verifications = fetch_verification_codes(
                 imap_server=imap_server,
                 username=email,
                 password=password,
                 unseen_only=False,
-                limit=20,
+                limit=50,  # Increased limit
                 prefer_graph=True,  # Try Graph API first if available
             )
+            
+            # Check how many messages were fetched
+            conn = _connect()
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM messages WHERE mailbox = ?", (email,))
+            after_count = cur.fetchone()[0]
+            
+            # Get recent messages to show what was fetched
+            cur.execute("""
+                SELECT subject, from_addr, received_date, body_preview
+                FROM messages
+                WHERE mailbox = ?
+                ORDER BY received_date DESC
+                LIMIT 10
+            """, (email,))
+            messages = cur.fetchall()
+            conn.close()
+            
+            new_messages = after_count - before_count
+            
+            print(f"\nFetched {after_count} total messages ({new_messages} new)")
+            
+            if messages:
+                print("\n" + "=" * 70)
+                print("RECENT MESSAGES IN INBOX")
+                print("=" * 70)
+                for i, msg in enumerate(messages, 1):
+                    print(f"\n{i}. {msg[0]}")
+                    print(f"   From: {msg[1]}")
+                    print(f"   Date: {msg[2] or 'N/A'}")
+                    if msg[3]:
+                        preview = msg[3][:80] + "..." if len(msg[3]) > 80 else msg[3]
+                        print(f"   Preview: {preview}")
             
             if verifications:
                 print("\n" + "=" * 70)
@@ -482,7 +561,18 @@ class ServbotCLI:
                 print("\n" + "=" * 70)
                 print("Codes saved to database.")
             else:
-                print("No verification codes found in recent emails.")
+                print("\n" + "=" * 70)
+                print("NO VERIFICATION CODES DETECTED")
+                print("=" * 70)
+                if messages:
+                    print("\nMessages were fetched but no verification codes were found.")
+                    print("This could mean:")
+                    print("  1. The verification email hasn't arrived yet")
+                    print("  2. The code pattern isn't recognized (check message preview above)")
+                    print("  3. The email is in a different folder")
+                else:
+                    print("\nNo messages found in inbox.")
+                    print("The account may be empty or emails aren't syncing yet.")
                 
         except Exception as e:
             print(f"Error fetching codes: {e}")

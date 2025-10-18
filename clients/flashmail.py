@@ -248,14 +248,19 @@ class FlashmailClient:
     def infer_imap_server(email: str) -> str:
         """Infers IMAP server address from email domain.
         
+        For Flashmail accounts, MUST use imap.shanyouxiang.com proxy!
+        This is Flashmail's IMAP proxy that handles OAuth and Microsoft restrictions.
+        
+        According to Flashmail docs:
+        - IMAP address: imap.shanyouxiang.com
+        - Port 993 (SSL) or Port 143 (no SSL)
+        
         Args:
             email: Email address
             
         Returns:
-            IMAP server address
+            IMAP server address (imap.shanyouxiang.com for all Flashmail accounts)
         """
-        domain = (email or "").lower().split("@")[-1]
-        if any(domain.endswith(d) for d in ["outlook.com", "hotmail.com", "live.com", "msn.com"]):
-            return "outlook.office365.com"
+        # ALL Flashmail accounts (outlook/hotmail/live) use Flashmail proxy
         return "imap.shanyouxiang.com"
 

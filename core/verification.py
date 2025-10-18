@@ -190,18 +190,35 @@ def fetch_verification_codes(
     if prefer_graph:
         graph_client = None
         
-        # First, try to get Graph credentials from the loaded account config
-        try:
-            graph_creds = load_graph_account()
-            if graph_creds:
-                # Check if username matches the loaded account
-                if not username or username == graph_creds.get('email'):
-                    graph_client = GraphClient.from_credentials(
-                        graph_creds['refresh_token'],
-                        graph_creds['client_id'],
-                    )
-        except Exception:
-            pass
+        # First, try to get Graph credentials for this specific account
+        if username:
+            try:
+                from ..data.database import get_accounts
+                accounts = get_accounts()
+                for acc in accounts:
+                    if acc['email'].lower() == username.lower():
+                        if acc.get('refresh_token') and acc.get('client_id'):
+                            graph_client = GraphClient.from_credentials(
+                                acc['refresh_token'],
+                                acc['client_id'],
+                            )
+                        break
+            except Exception:
+                pass
+        
+        # Fallback: try to get Graph credentials from global config
+        if not graph_client:
+            try:
+                graph_creds = load_graph_account()
+                if graph_creds:
+                    # Check if username matches the loaded account
+                    if not username or username == graph_creds.get('email'):
+                        graph_client = GraphClient.from_credentials(
+                            graph_creds['refresh_token'],
+                            graph_creds['client_id'],
+                        )
+            except Exception:
+                pass
         
         # If we have a Graph client, use it
         if graph_client:
@@ -231,7 +248,7 @@ def fetch_verification_codes(
     # Try IMAP
     if username and password and imap_server:
         try:
-            client = IMAPClient(imap_server, username, password, port, ssl)
+            client = IMAPClient(imap_server, username, password, port, use_ssl=ssl)
             messages = client.fetch_messages(
                 folder=folder,
                 unseen_only=unseen_only,
