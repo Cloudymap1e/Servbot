@@ -201,6 +201,7 @@ def fetch_verification_codes(
                             graph_client = GraphClient.from_credentials(
                                 acc['refresh_token'],
                                 acc['client_id'],
+                                mailbox=username,  # Pass mailbox for message tracking
                             )
                         break
             except Exception:
@@ -213,9 +214,11 @@ def fetch_verification_codes(
                 if graph_creds:
                     # Check if username matches the loaded account
                     if not username or username == graph_creds.get('email'):
+                        mailbox_for_graph = username or graph_creds.get('email', '')
                         graph_client = GraphClient.from_credentials(
                             graph_creds['refresh_token'],
                             graph_creds['client_id'],
+                            mailbox=mailbox_for_graph,  # Pass mailbox for message tracking
                         )
             except Exception:
                 pass
@@ -248,7 +251,9 @@ def fetch_verification_codes(
     # Try IMAP
     if username and password and imap_server:
         try:
-            client = IMAPClient(imap_server, username, password, port, use_ssl=ssl)
+            # Parse Flashmail password format if needed (IMAPClient does this too, but be explicit)
+            actual_password = password.split('----')[0] if '----' in password else password
+            client = IMAPClient(imap_server, username, actual_password, port, use_ssl=ssl)
             messages = client.fetch_messages(
                 folder=folder,
                 unseen_only=unseen_only,

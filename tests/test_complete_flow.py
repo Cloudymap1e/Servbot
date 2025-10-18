@@ -18,7 +18,7 @@ import os
 # Add parent directory to path to import servbot as a package
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
-grandparent_dir = os.path.dirname(parent_dir)
+grandparent_dir = parent_dir
 
 # Add grandparent to allow 'import servbot'
 if grandparent_dir not in sys.path:
@@ -75,9 +75,9 @@ class TestCompleteEmailFlow(unittest.TestCase):
             self.assertEqual(accounts[0].password, self.test_password)
             self.assertEqual(accounts[0].source, "flashmail")
             
-            print(f"âœ“ Provisioned account: {accounts[0].email}")
-            print(f"âœ“ Password: {accounts[0].password}")
-            print(f"âœ“ Source: {accounts[0].source}")
+            print(f"âœ?Provisioned account: {accounts[0].email}")
+            print(f"âœ?Password: {accounts[0].password}")
+            print(f"âœ?Source: {accounts[0].source}")
     
     def test_02_receive_verification_code(self):
         """Test receiving and extracting verification codes from email."""
@@ -121,9 +121,9 @@ class TestCompleteEmailFlow(unittest.TestCase):
                     found_code = True
                     self.assertEqual(v.is_link, False, "Should be a code, not a link")
                     self.assertIn(self.test_service.lower(), v.service.lower())
-                    print(f"âœ“ Found verification code: {v.code}")
-                    print(f"âœ“ Service identified: {v.service}")
-                    print(f"âœ“ From: {v.from_addr}")
+                    print(f"âœ?Found verification code: {v.code}")
+                    print(f"âœ?Service identified: {v.service}")
+                    print(f"âœ?From: {v.from_addr}")
                     break
             
             self.assertTrue(found_code, f"Should find the test code {self.test_code}")
@@ -169,8 +169,8 @@ class TestCompleteEmailFlow(unittest.TestCase):
                 if self.test_link in v.code:
                     found_link = True
                     self.assertEqual(v.is_link, True, "Should be a link")
-                    print(f"âœ“ Found verification link: {v.code}")
-                    print(f"âœ“ Service identified: {v.service}")
+                    print(f"âœ?Found verification link: {v.code}")
+                    print(f"âœ?Service identified: {v.service}")
                     break
             
             self.assertTrue(found_link, f"Should find the test link")
@@ -193,7 +193,7 @@ class TestCompleteEmailFlow(unittest.TestCase):
         )
         
         self.assertGreater(account_id, 0, "Account should be created")
-        print(f"âœ“ Created test account ID: {account_id}")
+        print(f"âœ?Created test account ID: {account_id}")
         
         # Insert test message
         message_id = save_message(
@@ -207,7 +207,7 @@ class TestCompleteEmailFlow(unittest.TestCase):
         )
         
         self.assertGreater(message_id, 0, "Message should be saved")
-        print(f"âœ“ Saved message ID: {message_id}")
+        print(f"âœ?Saved message ID: {message_id}")
         
         # Insert test verification
         verification_id = save_verification(
@@ -218,7 +218,7 @@ class TestCompleteEmailFlow(unittest.TestCase):
         )
         
         self.assertGreater(verification_id, 0, "Verification should be saved")
-        print(f"âœ“ Saved verification ID: {verification_id}")
+        print(f"âœ?Saved verification ID: {verification_id}")
         
         # Retrieve from database
         verifications = get_account_verifications(test_email_db, limit=10)
@@ -231,7 +231,7 @@ class TestCompleteEmailFlow(unittest.TestCase):
             if v['value'] == test_code_db and v['service'] == test_service_db:
                 found = True
                 self.assertEqual(v['is_link'], 0, "Should be stored as code (0)")
-                print(f"âœ“ Retrieved verification: {v['service']} = {v['value']}")
+                print(f"âœ?Retrieved verification: {v['service']} = {v['value']}")
                 break
         
         self.assertTrue(found, "Should find the verification we just saved")
@@ -251,10 +251,10 @@ class TestCompleteEmailFlow(unittest.TestCase):
         self.assertIn("summary", db_contents, "Should have summary key")
         
         summary = db_contents['summary']
-        print(f"âœ“ Total Accounts: {summary.get('total_accounts', 0)}")
-        print(f"âœ“ Total Messages: {summary.get('total_messages', 0)}")
-        print(f"âœ“ Total Verifications: {summary.get('total_verifications', 0)}")
-        print(f"âœ“ Total Graph Accounts: {summary.get('total_graph_accounts', 0)}")
+        print(f"âœ?Total Accounts: {summary.get('total_accounts', 0)}")
+        print(f"âœ?Total Messages: {summary.get('total_messages', 0)}")
+        print(f"âœ?Total Verifications: {summary.get('total_verifications', 0)}")
+        print(f"âœ?Total Graph Accounts: {summary.get('total_graph_accounts', 0)}")
         
         # Show some sample data if available
         if db_contents['accounts']:
@@ -323,8 +323,8 @@ class TestCompleteEmailFlow(unittest.TestCase):
             # Assertions
             self.assertIsNotNone(code, "Should eventually find the code")
             self.assertEqual(code, expected_code)
-            print(f"âœ“ Successfully polled and found code: {code}")
-            print(f"âœ“ Took {call_count[0]} polling attempts")
+            print(f"âœ?Successfully polled and found code: {code}")
+            print(f"âœ?Took {call_count[0]} polling attempts")
 
 
 class TestFlashmailAPIEndpoints(unittest.TestCase):
@@ -345,8 +345,8 @@ class TestFlashmailAPIEndpoints(unittest.TestCase):
             
             self.assertEqual(inventory['hotmail'], 150)
             self.assertEqual(inventory['outlook'], 250)
-            print(f"âœ“ Hotmail available: {inventory['hotmail']}")
-            print(f"âœ“ Outlook available: {inventory['outlook']}")
+            print(f"âœ?Hotmail available: {inventory['hotmail']}")
+            print(f"âœ?Outlook available: {inventory['outlook']}")
     
     def test_balance_endpoint(self):
         """Test balance query endpoint."""
@@ -362,7 +362,7 @@ class TestFlashmailAPIEndpoints(unittest.TestCase):
             balance = client.get_balance()
             
             self.assertEqual(balance, 42)
-            print(f"âœ“ Account balance: {balance}")
+            print(f"âœ?Account balance: {balance}")
 
 
 def run_complete_test_suite():
@@ -393,9 +393,9 @@ def run_complete_test_suite():
     print(f"Errors: {len(result.errors)}")
     
     if result.wasSuccessful():
-        print("\nâœ“âœ“âœ“ ALL TESTS PASSED! âœ“âœ“âœ“")
+        print("\nâœ“âœ“âœ?ALL TESTS PASSED! âœ“âœ“âœ?)
     else:
-        print("\nâœ—âœ—âœ— SOME TESTS FAILED âœ—âœ—âœ—")
+        print("\nâœ—âœ—âœ?SOME TESTS FAILED âœ—âœ—âœ?)
     
     print("=" * 70 + "\n")
     

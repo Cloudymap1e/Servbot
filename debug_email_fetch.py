@@ -3,7 +3,6 @@
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def debug_email_fetch(email_address):
     """Debug why emails aren't being fetched."""

@@ -9,12 +9,6 @@ Or directly:
     python main.py
 """
 
-import sys
-from pathlib import Path
-
-# Ensure the parent directory is in the path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from servbot.cli import main
 
 if __name__ == "__main__":

@@ -109,9 +109,19 @@ API Layer (api.py) → Core Logic (core/) → Clients (clients/) → External Se
 **Protocol Selection Logic**
 The system automatically selects the best available protocol:
 1. If `prefer_graph=True` (default), tries Microsoft Graph API first
-2. Falls back to IMAP if Graph credentials unavailable
-3. Graph API is faster and more reliable for Outlook/Hotmail accounts
-4. Flashmail accounts can use both protocols
+   - Searches for credentials in `accounts` table by matching email
+   - Falls back to global config if no account-specific credentials
+2. Falls back to IMAP if Graph credentials unavailable or Graph API fails
+3. Microsoft Graph API is faster and more reliable for Outlook/Hotmail accounts
+4. Flashmail accounts support both protocols:
+   - Graph API using shared OAuth credentials (preferred)
+   - IMAP via Flashmail proxy: `imap.shanyouxiang.com`
+
+**FIXED BUGS:**
+- ✅ GraphClient now accepts `mailbox` parameter and populates EmailMessage.mailbox
+- ✅ Flashmail accounts now use Graph API by default (was forcing IMAP)
+- ✅ Database upsert allows clearing credentials with NULL (removed COALESCE blocker)
+- ✅ Credential storage consolidated in `accounts` table (graph_accounts deprecated)
 
 ### Configuration & Credentials
 
@@ -164,11 +174,16 @@ The CLI (`cli.py`) provides these command categories:
 
 ## Important Implementation Notes
 
-### Graph API vs IMAP
-- Graph API requires `refresh_token` and `client_id`
-- IMAP requires server address, username, password
-- Flashmail accounts include Graph credentials by default
-- Graph API is preferred for Outlook/Hotmail (faster, more reliable)
+### Microsoft Graph API vs IMAP
+- **Microsoft Graph API** (https://graph.microsoft.com):
+  - Uses OAuth2: requires `refresh_token` and `client_id` to obtain access tokens
+  - Preferred for Outlook/Hotmail/Office 365 accounts (faster, more reliable, modern auth)
+  - Flashmail accounts include Graph credentials by default (shared credentials)
+  - Messages fetched via Graph must have `mailbox` field set for proper tracking
+- **IMAP**:
+  - Traditional protocol: requires server address, username, password
+  - Fallback when Graph credentials unavailable
+  - Flashmail accounts can use special IMAP proxy: `imap.shanyouxiang.com`
 
 ### AI Fallback Behavior
 - AI parsing (Cerebras) is used only when regex patterns fail
@@ -178,9 +193,19 @@ The CLI (`cli.py`) provides these command categories:
 
 ### Database Persistence
 - All fetched messages are saved to avoid reprocessing
+- **CRITICAL**: Messages fetched via Graph API MUST have `mailbox` field populated (was previously empty)
+- Verifications are queried by `mailbox` field - empty mailbox = verifications not retrievable
 - Verifications are deduplicated by service and value
 - CLI always checks database first before fetching from servers
 - Database operations fail gracefully without crashing
+
+### Credential Storage and Updates
+- Single source of truth: `accounts` table (includes password, refresh_token, client_id)
+- Legacy `graph_accounts` table is deprecated (auto-migrated on startup)
+- `upsert_account()` has two modes:
+  - `update_only_if_provided=False` (default): Direct updates, allows clearing fields with NULL
+  - `update_only_if_provided=True` (legacy): Only updates non-empty values (COALESCE behavior)
+- When updating credentials, use the default mode to allow token rotation/clearing
 
 ### Polling Pattern
 The `get_verification_for_service()` function implements polling:

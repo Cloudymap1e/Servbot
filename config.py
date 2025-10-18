@@ -53,23 +53,44 @@ def load_graph_account() -> Optional[Dict[str, str]]:
     """
     Load Microsoft Graph API account credentials.
     
+    DEPRECATED: Use load_account_credentials() for new code.
+    This function is kept for backward compatibility.
+    
     Priority:
-    1) SQLite DB (servbot.db -> graph_accounts)
-    2) graph_email.py example holder
-    3) Environment variables
+    1) SQLite DB (servbot.db -> accounts table - preferred)
+    2) SQLite DB (servbot.db -> graph_accounts table - legacy)
+    3) Environment variables fallback
+    
+    Returns:
+        Dict with keys: email, refresh_token, client_id
+        Returns None if no credentials found
     """
     try:
-        # 1) Try database first
+        # 1) Try accounts table first (new unified storage)
         try:
-            from .data.database import ensure_db, get_graph_account as db_get_graph_account
+            from .data.database import ensure_db, get_accounts
             ensure_db()
+            
+            # Get first account with Graph credentials
+            accounts = get_accounts()
+            for acc in accounts:
+                if acc.get('refresh_token') and acc.get('client_id'):
+                    return {
+                        'email': acc['email'],
+                        'refresh_token': acc['refresh_token'],
+                        'client_id': acc['client_id'],
+                    }
+        except Exception:
+            pass
+        
+        # 2) Try legacy graph_accounts table
+        try:
+            from .data.database import get_graph_account as db_get_graph_account
             acct = db_get_graph_account()
             if acct and acct.get('email') and acct.get('refresh_token') and acct.get('client_id'):
                 return acct
         except Exception:
             pass
-
-
         
         # 3) Environment variables fallback
         email = os.getenv('GRAPH_EMAIL')
@@ -82,6 +103,58 @@ def load_graph_account() -> Optional[Dict[str, str]]:
                 'refresh_token': refresh_token,
                 'client_id': client_id
             }
+        
+        return None
+    except Exception:
+        return None
+
+
+def load_account_credentials(email: str) -> Optional[Dict[str, str]]:
+    """Load credentials for a specific email account.
+    
+    This is the preferred method for loading account credentials.
+    Checks the unified accounts table first, with fallbacks.
+    
+    Args:
+        email: Email address to load credentials for
+        
+    Returns:
+        Dict with account credentials including:
+        - email: Email address
+        - password: Account password (if IMAP)
+        - refresh_token: OAuth refresh token (if Microsoft Graph)
+        - client_id: OAuth client ID (if Microsoft Graph)
+        - imap_server: IMAP server address (if IMAP)
+        - type: Account type (outlook, hotmail, other)
+        - source: Account source (flashmail, manual, file, migrated)
+        
+        Returns None if account not found
+        
+    Example:
+        >>> creds = load_account_credentials("user@outlook.com")
+        >>> if creds and creds.get('refresh_token'):
+        ...     # Use Microsoft Graph API
+        ...     client = GraphClient.from_credentials(
+        ...         creds['refresh_token'],
+        ...         creds['client_id'],
+        ...         mailbox=creds['email']
+        ...     )
+        >>> elif creds and creds.get('password'):
+        ...     # Use IMAP
+        ...     client = IMAPClient(
+        ...         creds['imap_server'],
+        ...         creds['email'],
+        ...         creds['password']
+        ...     )
+    """
+    try:
+        from .data.database import ensure_db, get_accounts
+        ensure_db()
+        
+        accounts = get_accounts()
+        for acc in accounts:
+            if acc['email'].lower() == email.lower():
+                return acc
         
         return None
     except Exception:

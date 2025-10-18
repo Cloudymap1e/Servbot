@@ -20,9 +20,6 @@ import sys
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from servbot import (
     list_database,
     get_account_verifications,
@@ -252,7 +249,8 @@ class ServbotCLI:
             account = accounts[0]
             imap_server = FlashmailClient.infer_imap_server(account.email)
             
-            # Save to database with all credentials
+            # Save to database with all credentials (password + Microsoft Graph OAuth)
+            # Flashmail accounts support both IMAP and Microsoft Graph API
             upsert_account(
                 email=account.email,
                 password=account.password,
@@ -262,6 +260,7 @@ class ServbotCLI:
                 imap_server=imap_server,
                 refresh_token=FLASHMAIL_REFRESH_TOKEN,
                 client_id=FLASHMAIL_CLIENT_ID,
+                update_only_if_provided=False,  # Direct update mode
             )
             
             print("\n" + "=" * 70)
@@ -271,6 +270,8 @@ class ServbotCLI:
             print(f"Password: {account.password}")
             print(f"Type:     {account.account_type}")
             print(f"IMAP:     {imap_server}")
+            print(f"\nMicrosoft Graph API: Enabled (OAuth credentials saved)")
+            print("  → Supports both IMAP and Graph API for email fetching")
             print("\nAccount saved to database.")
             print("=" * 70)
             
@@ -414,8 +415,10 @@ class ServbotCLI:
                 password=password,
                 source="manual",
                 imap_server=imap_server,
+                update_only_if_provided=True,  # Use legacy mode for manual adds
             )
             print(f"\nAccount added: {email}")
+            print("Note: Manual accounts use IMAP. To enable Graph API, provide refresh_token and client_id.")
         except Exception as e:
             print(f"Error adding account: {e}")
     

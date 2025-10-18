@@ -9,7 +9,6 @@ from typing import Optional, Tuple
 print("Loading integration_test module...", flush=True)
 
 # Add servbot's parent directory to the path to allow package imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 print("Importing servbot...", flush=True)
 from servbot import fetch_verification_codes, GraphClient

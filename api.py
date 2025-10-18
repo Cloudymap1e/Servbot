@@ -99,6 +99,7 @@ def provision_flashmail_account(
         
         # Save complete account credentials (email, password, refresh_token, client_id)
         # All credentials are stored together in the accounts table
+        # Use update_only_if_provided=False to ensure all fields are set
         upsert_account(
             email=account.email,
             password=account.password,
@@ -108,9 +109,11 @@ def provision_flashmail_account(
             imap_server=imap_server,
             refresh_token=FLASHMAIL_REFRESH_TOKEN,
             client_id=FLASHMAIL_CLIENT_ID,
+            update_only_if_provided=False,  # Allow direct updates
         )
         
         # Fetch verification
+        # Prefer Graph API if credentials are available, fallback to IMAP
         value = get_verification_for_service(
             target_service=target_service,
             imap_server=imap_server,
@@ -119,7 +122,7 @@ def provision_flashmail_account(
             timeout_seconds=timeout_seconds,
             poll_interval_seconds=poll_interval_seconds,
             prefer_link=prefer_link,
-            prefer_graph=False,  # Use IMAP for Flashmail accounts
+            prefer_graph=True,  # Try Graph API first since we just saved Graph credentials
         )
         
         if not value:

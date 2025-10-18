@@ -57,10 +57,14 @@ class IMAPClient(EmailClient):
         Args:
             server: IMAP server address
             username: Email username
-            password: Email password
+            password: Email password (or Flashmail format: password----token----client_id)
             port: IMAP port (default from constants)
             use_ssl: Use SSL connection (default from constants)
         """
+        # Parse Flashmail password format: password----refresh_token----client_id
+        if '----' in password:
+            password = password.split('----')[0]
+        
         self.server = server
         self.username = username
         self.password = password

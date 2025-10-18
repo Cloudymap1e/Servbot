@@ -1,6 +1,13 @@
 """Microsoft Graph API email client.
 
 Provides modern OAuth2-based email fetching via Microsoft Graph API.
+
+NOTE: This is Microsoft's Graph API (https://graph.microsoft.com),
+not to be confused with other graph APIs. It uses OAuth2 refresh tokens
+to obtain access tokens for API requests.
+
+For Outlook/Hotmail/Office 365 accounts, this is preferred over IMAP
+for better reliability and modern authentication support.
 """
 
 import datetime as dt
@@ -32,6 +39,7 @@ class GraphClient(EmailClient):
         access_token: OAuth2 access token
         refresh_token: Optional OAuth2 refresh token
         client_id: Optional application client ID
+        mailbox: Email address of the mailbox being accessed
     """
 
     def __init__(
@@ -39,6 +47,7 @@ class GraphClient(EmailClient):
         access_token: str,
         refresh_token: Optional[str] = None,
         client_id: Optional[str] = None,
+        mailbox: Optional[str] = None,
     ):
         """Initializes Graph API client.
         
@@ -46,6 +55,7 @@ class GraphClient(EmailClient):
             access_token: OAuth2 access token
             refresh_token: OAuth2 refresh token (for token renewal)
             client_id: Application client ID (for token renewal)
+            mailbox: Email address of the mailbox (for message tracking)
         """
         if not requests:
             raise RuntimeError("requests library required for Graph API client")
@@ -53,6 +63,7 @@ class GraphClient(EmailClient):
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.client_id = client_id
+        self.mailbox = mailbox or ""
 
     def fetch_messages(
         self,
@@ -71,7 +82,17 @@ class GraphClient(EmailClient):
             
         Returns:
             List of EmailMessage objects
+        
+        Raises:
+            RuntimeError: If mailbox is not set or API request fails after retry
         """
+        # Validate mailbox is set
+        if not self.mailbox:
+            raise RuntimeError(
+                "Mailbox not set for GraphClient. Messages cannot be tracked without mailbox email address. "
+                "Initialize GraphClient with mailbox parameter or use from_credentials() with mailbox."
+            )
+        
         try:
             # Build filter query
             filters = []
@@ -93,12 +114,38 @@ class GraphClient(EmailClient):
             if filter_query:
                 params["$filter"] = filter_query
             
+            # First attempt
             response = requests.get(  # type: ignore
                 url,
                 headers={"Authorization": f"Bearer {self.access_token}"},
                 params=params,
                 timeout=30,
             )
+            
+            # Handle 401 Unauthorized - token may be expired
+            if response.status_code == 401:
+                # Try to refresh token
+                new_token = self.refresh_access_token()
+                if new_token:
+                    # Retry with new token
+                    response = requests.get(  # type: ignore
+                        url,
+                        headers={"Authorization": f"Bearer {new_token}"},
+                        params=params,
+                        timeout=30,
+                    )
+            
+            # Handle errors
+            if response.status_code == 403:
+                raise RuntimeError(
+                    f"Insufficient permissions to access mailbox '{self.mailbox}'. "
+                    "Required scopes: Mail.Read or Mail.ReadWrite"
+                )
+            elif response.status_code == 404:
+                raise RuntimeError(
+                    f"Mailbox or folder not found: mailbox='{self.mailbox}', folder='{folder}'"
+                )
+            
             response.raise_for_status()
             
             raw_messages = response.json().get("value", [])
@@ -122,7 +169,7 @@ class GraphClient(EmailClient):
                 email_msg = EmailMessage(
                     message_id=str(msg.get("id", "")),
                     provider="graph",
-                    mailbox="",  # Graph API doesn't expose mailbox directly
+                    mailbox=self.mailbox,  # Use client's mailbox
                     subject=msg.get("subject", ""),
                     from_addr=from_addr,
                     received_date=msg.get("receivedDateTime", ""),
@@ -165,6 +212,13 @@ class GraphClient(EmailClient):
     def refresh_access_token(self) -> Optional[str]:
         """Refreshes the access token using refresh token.
         
+        Attempts to refresh the OAuth access token using the stored refresh token.
+        If successful, updates the client's access_token and optionally persists
+        to database if mailbox is known.
+        
+        Microsoft Graph may rotate refresh tokens - if a new refresh_token is
+        returned, it will be stored and the old one should be discarded.
+        
         Returns:
             New access token or None if refresh fails
         """
@@ -183,20 +237,64 @@ class GraphClient(EmailClient):
                 timeout=10,
             )
             response.raise_for_status()
-            new_token = response.json().get("access_token")
-            if new_token:
-                self.access_token = new_token
-            return new_token
+            token_data = response.json()
+            new_access_token = token_data.get("access_token")
+            new_refresh_token = token_data.get("refresh_token")  # May be rotated
+            
+            if new_access_token:
+                self.access_token = new_access_token
+                
+                # If refresh token was rotated, update it
+                if new_refresh_token and new_refresh_token != self.refresh_token:
+                    self.refresh_token = new_refresh_token
+                    
+                    # Persist to database if mailbox is known
+                    if self.mailbox:
+                        try:
+                            self._persist_tokens_to_db(new_access_token, new_refresh_token)
+                        except Exception:
+                            # Don't fail refresh if persistence fails
+                            pass
+            
+            return new_access_token
         except Exception:
             return None
+    
+    def _persist_tokens_to_db(self, access_token: str, refresh_token: str) -> None:
+        """Persists refreshed tokens to database.
+        
+        Args:
+            access_token: New access token (not stored, just for future use)
+            refresh_token: New or rotated refresh token to persist
+        
+        Note: Access tokens are short-lived and not stored. Only refresh token
+        and client_id are persisted for future token refresh operations.
+        """
+        try:
+            # Import here to avoid circular dependency
+            from ..data.database import upsert_account
+            
+            # Update only the refresh_token, keeping other fields unchanged
+            # Use update_only_if_provided=True to preserve other fields
+            upsert_account(
+                email=self.mailbox,
+                refresh_token=refresh_token,
+                client_id=self.client_id,
+                update_only_if_provided=True,  # Don't clear other fields
+            )
+        except Exception:
+            # Silently fail - token refresh itself succeeded
+            # The in-memory token is still valid for this session
+            pass
 
     @classmethod
-    def from_credentials(cls, refresh_token: str, client_id: str) -> Optional['GraphClient']:
+    def from_credentials(cls, refresh_token: str, client_id: str, mailbox: Optional[str] = None) -> Optional['GraphClient']:
         """Creates a GraphClient from refresh token credentials.
         
         Args:
             refresh_token: OAuth2 refresh token
             client_id: Application client ID
+            mailbox: Email address of the mailbox (optional)
             
         Returns:
             GraphClient instance or None if token refresh fails
@@ -215,7 +313,7 @@ class GraphClient(EmailClient):
             response.raise_for_status()
             access_token = response.json().get("access_token")
             if access_token:
-                return cls(access_token, refresh_token, client_id)
+                return cls(access_token, refresh_token, client_id, mailbox)
         except Exception:
             pass
         return None

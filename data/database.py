@@ -40,8 +40,8 @@ def init_db() -> None:
             source TEXT,             -- flashmail | file | manual | other
             card TEXT,               -- source API card if any
             imap_server TEXT,
-            refresh_token TEXT,      -- Graph API OAuth refresh token
-            client_id TEXT,          -- Graph API OAuth client ID
+            refresh_token TEXT,      -- Microsoft Graph API OAuth refresh token
+            client_id TEXT,          -- Microsoft Graph API OAuth client ID
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             last_seen_at TEXT
         );
@@ -82,13 +82,16 @@ def init_db() -> None:
         """
     )
 
+    # LEGACY TABLE: graph_accounts is deprecated
+    # New accounts should store credentials in the accounts table
+    # This table is kept for backward compatibility
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS graph_accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE,
-            refresh_token TEXT,
-            client_id TEXT,
+            refresh_token TEXT,      -- Microsoft Graph API OAuth refresh token
+            client_id TEXT,          -- Microsoft Graph API OAuth client ID
             added_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         """
@@ -102,8 +105,10 @@ def init_db() -> None:
 
 
 def ensure_db() -> None:
+    """Ensures database is initialized and migrated."""
     init_db()
     migrate_email_txt_to_db()
+    migrate_graph_accounts_to_accounts()
 
 
 def infer_type_from_email(email: str) -> str:
@@ -115,29 +120,79 @@ def infer_type_from_email(email: str) -> str:
     return "other"
 
 
-def upsert_account(*, email: str, password: str = "", type: Optional[str] = None, source: Optional[str] = None, card: Optional[str] = None, imap_server: Optional[str] = None, refresh_token: Optional[str] = None, client_id: Optional[str] = None) -> int:
+def upsert_account(
+    *,
+    email: str,
+    password: str = "",
+    type: Optional[str] = None,
+    source: Optional[str] = None,
+    card: Optional[str] = None,
+    imap_server: Optional[str] = None,
+    refresh_token: Optional[str] = None,
+    client_id: Optional[str] = None,
+    update_only_if_provided: bool = False,
+) -> int:
+    """Upsert an account into the database.
+    
+    Args:
+        email: Email address (required, unique key)
+        password: Account password
+        type: Account type (outlook, hotmail, other)
+        source: Source of account (flashmail, manual, file)
+        card: API card/key if from provisioning service
+        imap_server: IMAP server address
+        refresh_token: OAuth refresh token (for Microsoft Graph)
+        client_id: OAuth client ID (for Microsoft Graph)
+        update_only_if_provided: If True, only update fields that are explicitly provided (not None/empty)
+                                If False, all fields are updated, allowing NULL to clear values
+    
+    Returns:
+        Account ID
+    """
     if not email:
         raise ValueError("email is required")
     acc_type = type or infer_type_from_email(email)
 
     conn = _connect()
     cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO accounts(email, password, type, source, card, imap_server, refresh_token, client_id)
-        VALUES(?,?,?,?,?,?,?,?)
-        ON CONFLICT(email) DO UPDATE SET
-            password=excluded.password,
-            type=COALESCE(excluded.type, accounts.type),
-            source=COALESCE(excluded.source, accounts.source),
-            card=COALESCE(excluded.card, accounts.card),
-            imap_server=COALESCE(excluded.imap_server, accounts.imap_server),
-            refresh_token=COALESCE(excluded.refresh_token, accounts.refresh_token),
-            client_id=COALESCE(excluded.client_id, accounts.client_id)
-        ;
-        """,
-        (email, password, acc_type, source, card, imap_server, refresh_token, client_id),
-    )
+    
+    if update_only_if_provided:
+        # Legacy mode: only update non-empty values (for backward compatibility)
+        cur.execute(
+            """
+            INSERT INTO accounts(email, password, type, source, card, imap_server, refresh_token, client_id)
+            VALUES(?,?,?,?,?,?,?,?)
+            ON CONFLICT(email) DO UPDATE SET
+                password=CASE WHEN excluded.password != '' THEN excluded.password ELSE accounts.password END,
+                type=COALESCE(excluded.type, accounts.type),
+                source=COALESCE(excluded.source, accounts.source),
+                card=COALESCE(excluded.card, accounts.card),
+                imap_server=COALESCE(excluded.imap_server, accounts.imap_server),
+                refresh_token=COALESCE(excluded.refresh_token, accounts.refresh_token),
+                client_id=COALESCE(excluded.client_id, accounts.client_id)
+            ;
+            """,
+            (email, password, acc_type, source, card, imap_server, refresh_token, client_id),
+        )
+    else:
+        # New mode: direct update allows NULL to clear values
+        cur.execute(
+            """
+            INSERT INTO accounts(email, password, type, source, card, imap_server, refresh_token, client_id)
+            VALUES(?,?,?,?,?,?,?,?)
+            ON CONFLICT(email) DO UPDATE SET
+                password=excluded.password,
+                type=excluded.type,
+                source=excluded.source,
+                card=excluded.card,
+                imap_server=excluded.imap_server,
+                refresh_token=excluded.refresh_token,
+                client_id=excluded.client_id
+            ;
+            """,
+            (email, password, acc_type, source, card, imap_server, refresh_token, client_id),
+        )
+    
     conn.commit()
     cur.execute("SELECT id FROM accounts WHERE email=?", (email,))
     row = cur.fetchone()
@@ -367,3 +422,69 @@ def find_verification(service: str, mailbox: Optional[str] = None, since_hours: 
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def migrate_graph_accounts_to_accounts() -> None:
+    """Migrates data from deprecated graph_accounts table to accounts table.
+    
+    This is a one-time migration for accounts that were stored in the legacy
+    graph_accounts table. The credentials are moved to the main accounts table.
+    
+    This function is idempotent and safe to run multiple times.
+    """
+    try:
+        conn = _connect()
+        cur = conn.cursor()
+        
+        # Check if graph_accounts table has any data
+        cur.execute("SELECT COUNT(*) FROM graph_accounts")
+        count = cur.fetchone()
+        if not count or count[0] == 0:
+            conn.close()
+            return  # Nothing to migrate
+        
+        # Get all graph accounts
+        cur.execute("""
+            SELECT email, refresh_token, client_id, added_at
+            FROM graph_accounts
+            ORDER BY added_at DESC
+        """)
+        graph_accounts = cur.fetchall()
+        
+        migrated = 0
+        for row in graph_accounts:
+            email, refresh_token, client_id, added_at = row
+            
+            # Check if account already exists in accounts table
+            cur.execute("SELECT id, refresh_token, client_id FROM accounts WHERE email = ?", (email,))
+            existing = cur.fetchone()
+            
+            if existing:
+                # Account exists - only update if it doesn't have Graph credentials
+                if not existing[1] or not existing[2]:  # No refresh_token or client_id
+                    cur.execute("""
+                        UPDATE accounts
+                        SET refresh_token = ?, client_id = ?
+                        WHERE email = ?
+                    """, (refresh_token, client_id, email))
+                    migrated += 1
+            else:
+                # Account doesn't exist - create it with Graph credentials
+                # Infer type from email domain
+                acc_type = infer_type_from_email(email)
+                cur.execute("""
+                    INSERT INTO accounts (email, password, type, source, refresh_token, client_id)
+                    VALUES (?, '', ?, 'migrated', ?, ?)
+                """, (email, acc_type, refresh_token, client_id))
+                migrated += 1
+        
+        conn.commit()
+        conn.close()
+        
+        if migrated > 0:
+            print(f"Migrated {migrated} account(s) from graph_accounts to accounts table.")
+            
+    except Exception as e:
+        # Don't fail initialization if migration fails
+        print(f"Warning: Graph accounts migration failed: {e}")
+        pass

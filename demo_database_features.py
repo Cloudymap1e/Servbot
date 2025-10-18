@@ -9,12 +9,7 @@ This script demonstrates:
 import sys
 import os
 
-# Setup path for servbot import
-parent_dir = os.path.dirname(os.getcwd())
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-from servbot import list_database, get_account_verifications, FlashmailClient
+from servbot import list_database
 from unittest.mock import patch
 
 

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from servbot.clients.graph import GraphClient
 from servbot.core.models import EmailMessage
