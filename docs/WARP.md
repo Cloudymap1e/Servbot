@@ -2,6 +2,8 @@
 
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
 
+> Note: The canonical Warp guidance (commands, setup, CI parity) now lives at `/WARP.md`. This page retains extended background; prefer the root file and `docs/QUICKSTART*.md` and `docs/CLI_*.md` for exact commands.
+
 ## Project Overview
 
 Servbot is a Python-based email verification code extraction system that supports multiple email protocols (IMAP, Microsoft Graph API) and integrates with Flashmail for account provisioning. The system uses regex patterns with AI fallback (Cerebras) to extract verification codes from 100+ services.
