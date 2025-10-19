@@ -2,6 +2,7 @@
 # Provides modern lint feedback without affecting runtime or build.
 line-length = 100
 
+[lint]
 # Enable common rule sets: pycodestyle (E), pyflakes (F), warnings (W), import sorting (I)
 select = ["E", "F", "W", "I"]
 
@@ -11,11 +12,17 @@ ignore = [
   "E501",  # line length (Black manages formatting)
 ]
 
-# Avoid scanning generated or data directories
+# Avoid scanning generated or data directories (and legacy non-UTF8 files)
 extend-exclude = [
   "servbot/data",
   ".venv",
   "venv",
   "build",
   "dist",
+  "scripts/maintenance",
+  "tests/test_complete_flow.py",
+  "tests/test_correct_password.py",
+  "tests/test_credential_fixes.py",
+  "tests/test_fixes_standalone.py",
+  "tests/test_integration_live.py",
 ]
