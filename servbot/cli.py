@@ -129,6 +129,8 @@ class ServbotCLI:
             self.cmd_database()
         elif cmd == "cards":
             self.cmd_cards(args)
+        elif cmd == "register":
+            self.cmd_register(args)
         else:
             print(f"Unknown command: {cmd}")
             print("Type 'help' for available commands.")
@@ -163,6 +165,12 @@ class ServbotCLI:
         print("  cards rm <alias>      - Remove card metadata (optionally delete secret)")
         print("  cards default <alias> - Set default card alias")
         print("  cards balance         - Refresh and display balances for all cards")
+        print("\nBrowser Automation:")
+        print("  register <service> --url <signup_url> [--email <mailbox>|--provision <outlook|hotmail>] ")
+        print("                         [--headed|--headless] [--timeout <sec>] [--prefer-code|--prefer-link]")
+        print("                         [--config <selectors.json>] [--user-data-dir <path>] ")
+        print("                         [--email-selector <css>] [--password-selector <css>] ")
+        print("                         [--submit-selector <css>] [--otp-selector <css>] [--success-selector <css>]")
         print("\nGeneral:")
         print("  help                  - Show this help message")
         print("  exit/quit             - Exit the program")
@@ -479,6 +487,126 @@ class ServbotCLI:
         except Exception as e:
             print(f"Error adding account: {e}")
     
+    def cmd_register(self, args: List[str]):
+        """Run a browser registration flow.
+        
+        Usage:
+          register SERVICE --url URL [--email MAILBOX | --provision outlook|hotmail]
+                           [--headed|--headless] [--timeout SEC] [--prefer-code|--prefer-link]
+                           [--config selectors.json]
+                           [--user-data-dir PATH]
+                           [--email-selector CSS]
+                           [--password-selector CSS]
+                           [--submit-selector CSS]
+                           [--otp-selector CSS]
+                           [--success-selector CSS]
+        """
+        if not args:
+            print("Usage: register SERVICE --url URL [--email MAILBOX | --provision outlook|hotmail]")
+            return
+        service = args[0]
+        # Parse flags
+        url = None
+        mailbox = None
+        provision = None
+        headed = False
+        headless = True
+        timeout = 300
+        prefer_link = True
+        config_path = None
+        user_data_dir = None
+        # Quick selector overrides
+        quick_cfg = {}
+
+        i = 1
+        while i < len(args):
+            a = args[i]
+            if a == "--url" and i + 1 < len(args):
+                url = args[i+1]; i += 2; continue
+            if a == "--email" and i + 1 < len(args):
+                mailbox = args[i+1]; i += 2; continue
+            if a == "--provision" and i + 1 < len(args):
+                provision = args[i+1]; i += 2; continue
+            if a == "--headed":
+                headed = True; headless = False; i += 1; continue
+            if a == "--headless":
+                headless = True; headed = False; i += 1; continue
+            if a == "--timeout" and i + 1 < len(args):
+                try:
+                    timeout = int(args[i+1])
+                except Exception:
+                    pass
+                i += 2; continue
+            if a == "--prefer-code":
+                prefer_link = False; i += 1; continue
+            if a == "--prefer-link":
+                prefer_link = True; i += 1; continue
+            if a == "--config" and i + 1 < len(args):
+                config_path = args[i+1]; i += 2; continue
+            if a == "--user-data-dir" and i + 1 < len(args):
+                user_data_dir = args[i+1]; i += 2; continue
+            # Quick selectors
+            if a == "--email-selector" and i + 1 < len(args):
+                quick_cfg['email_input'] = args[i+1]; i += 2; continue
+            if a == "--password-selector" and i + 1 < len(args):
+                quick_cfg['password_input'] = args[i+1]; i += 2; continue
+            if a == "--submit-selector" and i + 1 < len(args):
+                quick_cfg['submit_button'] = args[i+1]; i += 2; continue
+            if a == "--otp-selector" and i + 1 < len(args):
+                quick_cfg['otp_input'] = args[i+1]; i += 2; continue
+            if a == "--success-selector" and i + 1 < len(args):
+                quick_cfg['success_selector'] = args[i+1]; i += 2; continue
+            i += 1
+
+        if not url:
+            print("Missing --url")
+            return
+        if not mailbox and not provision:
+            print("Provide --email or --provision outlook|hotmail")
+            return
+
+        # Load selectors config if provided
+        flow_config = {}
+        if config_path:
+            try:
+                import json
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    flow_config = json.load(f)
+            except Exception as e:
+                print(f"Failed to read config file: {e}")
+                return
+        flow_config.update(quick_cfg)
+        if 'email_input' not in flow_config:
+            flow_config['email_input'] = "input[type=email], input[name=email]"
+
+        # Call API orchestration
+        from servbot.api import register_service_account
+
+        result = register_service_account(
+            service=service,
+            website_url=url,
+            mailbox_email=mailbox,
+            provision_new=bool(provision),
+            account_type=(provision or 'outlook'),
+            headless=headless,
+            timeout_seconds=timeout,
+            prefer_link=prefer_link,
+            flow_config=flow_config,
+            user_data_dir=user_data_dir,
+        )
+        if not result:
+            print("Registration failed")
+            return
+        print("\n" + "=" * 70)
+        print("REGISTRATION RESULT")
+        print("=" * 70)
+        print(f"Service:         {result['service']}")
+        print(f"Mailbox:         {result['mailbox_email']}")
+        print(f"Service Username:{result.get('service_username', '')}")
+        print(f"Status:          {result['status']}")
+        print(f"Registration ID: {result['registration_id']}")
+        print("=" * 70)
+
     def cmd_database(self):
         """Show complete database contents."""
         try:

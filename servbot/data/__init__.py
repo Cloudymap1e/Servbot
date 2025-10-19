@@ -11,6 +11,10 @@ from .database import (
     find_verification,
     get_graph_account,
     upsert_graph_account,
+    save_registration,
+    update_registration_status,
+    list_registrations,
+    get_registration,
 )
 
 __all__ = [
@@ -25,5 +29,9 @@ __all__ = [
     'find_verification',
     'get_graph_account',
     'upsert_graph_account',
+    'save_registration',
+    'update_registration_status',
+    'list_registrations',
+    'get_registration',
 ]
 
