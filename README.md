@@ -47,7 +47,7 @@ The CLI provides commands for:
 - Flashmail operations (`balance`, `inventory`)
 - Database queries (`database`)
 
-**See [CLI_GUIDE.md](CLI_GUIDE.md) for complete documentation.**
+**See [docs/CLI_GUIDE.md](docs/CLI_GUIDE.md) for complete documentation.**
 
 ### Python API
 
@@ -126,26 +126,26 @@ servbot/
 ├── cli.py                # Interactive CLI implementation
 ├── main.py               # Direct CLI entry point
 ├── config.py             # Configuration loader
-│
+�?
 ├── core/                 # Core business logic
-│   ├── __init__.py
-│   ├── models.py         # Data classes (Verification, EmailAccount)
-│   └── verification.py   # Verification extraction logic
-│
+�?  ├── __init__.py
+�?  ├── models.py         # Data classes (Verification, EmailAccount)
+�?  └── verification.py   # Verification extraction logic
+�?
 ├── clients/              # Email client implementations
-│   ├── __init__.py
-│   ├── base.py           # Abstract base client
-│   ├── imap.py           # IMAP client
-│   ├── graph.py          # Microsoft Graph API client
-│   └── flashmail.py      # Flashmail/Shanyou API client
-│
+�?  ├── __init__.py
+�?  ├── base.py           # Abstract base client
+�?  ├── imap.py           # IMAP client
+�?  ├── graph.py          # Microsoft Graph API client
+�?  └── flashmail.py      # Flashmail/Shanyou API client
+�?
 ├── parsers/              # Content parsing modules
-│   ├── __init__.py
-│   ├── code_parser.py    # Regex-based code extraction
-│   ├── email_parser.py   # Email structure parsing
-│   ├── service_parser.py # Service identification
-│   └── ai_parser.py      # AI-powered fallback
-│
+�?  ├── __init__.py
+�?  ├── code_parser.py    # Regex-based code extraction
+�?  ├── email_parser.py   # Email structure parsing
+�?  ├── service_parser.py # Service identification
+�?  └── ai_parser.py      # AI-powered fallback
+�?
 └── data/                 # Data layer
     ├── __init__.py
     ├── services.py       # Service catalog (100+ services)
@@ -386,9 +386,9 @@ from servbot import fetch_verification_codes
 ```
 
 Internal imports have changed:
-- `servbot.code_parser` → `servbot.parsers`
-- `servbot.imap_client` → `servbot.clients`
-- `servbot.db` → `servbot.data`
+- `servbot.code_parser` �?`servbot.parsers`
+- `servbot.imap_client` �?`servbot.clients`
+- `servbot.db` �?`servbot.data`
 
 ## Contributing
 
