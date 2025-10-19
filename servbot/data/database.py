@@ -118,6 +118,36 @@ def init_db() -> None:
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_flashmail_cards_alias ON flashmail_cards(alias);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_flashmail_cards_default ON flashmail_cards(is_default);")
 
+    # New table: registrations (stores service site account results and artifacts)
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS registrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service TEXT NOT NULL,
+            website_url TEXT,
+            mailbox_email TEXT NOT NULL,
+            service_username TEXT,
+            service_password TEXT,
+            status TEXT DEFAULT 'success',
+            error TEXT,
+            cookies_json TEXT,
+            storage_state_json TEXT,
+            user_agent TEXT,
+            profile_dir TEXT,
+            debug_dir TEXT,
+            artifacts_json TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        );
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_registrations_service_mailbox ON registrations(service, mailbox_email);"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_registrations_created_at ON registrations(created_at);"
+    )
+
     conn.commit()
     conn.close()
 
@@ -649,3 +679,114 @@ def remove_flashmail_card(alias: str) -> bool:
     conn.commit()
     conn.close()
     return True
+
+
+# Registrations table helpers
+
+def save_registration(
+    *,
+    service: str,
+    website_url: str = "",
+    mailbox_email: str,
+    service_username: str = "",
+    service_password: str = "",
+    status: str = "success",
+    error: str = "",
+    cookies_json: str = "",
+    storage_state_json: str = "",
+    user_agent: str = "",
+    profile_dir: str = "",
+    debug_dir: str = "",
+    artifacts_json: str = "",
+) -> int:
+    if not service or not mailbox_email:
+        return 0
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO registrations(
+            service, website_url, mailbox_email, service_username, service_password,
+            status, error, cookies_json, storage_state_json, user_agent, profile_dir,
+            debug_dir, artifacts_json, updated_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
+        """,
+        (
+            service,
+            website_url,
+            mailbox_email,
+            service_username,
+            service_password,
+            status,
+            error,
+            cookies_json,
+            storage_state_json,
+            user_agent,
+            profile_dir,
+            debug_dir,
+            artifacts_json,
+        ),
+    )
+    conn.commit()
+    rid = cur.lastrowid
+    conn.close()
+    return int(rid)
+
+
+def update_registration_status(registration_id: int, status: str, error: str | None = None) -> bool:
+    if not registration_id or not status:
+        return False
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE registrations
+        SET status = ?, error = COALESCE(?, error), updated_at = datetime('now')
+        WHERE id = ?
+        """,
+        (status, error, registration_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def list_registrations(service: str | None = None, mailbox_email: str | None = None) -> List[Dict[str, Any]]:
+    conn = _connect()
+    cur = conn.cursor()
+    q = "SELECT id, service, website_url, mailbox_email, service_username, status, created_at, updated_at FROM registrations"
+    params: list[Any] = []
+    wh: list[str] = []
+    if service:
+        wh.append("service = ?")
+        params.append(service)
+    if mailbox_email:
+        wh.append("mailbox_email = ?")
+        params.append(mailbox_email)
+    if wh:
+        q += " WHERE " + " AND ".join(wh)
+    q += " ORDER BY created_at DESC"
+    cur.execute(q, params)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_registration(service: str, mailbox_email: str) -> Optional[Dict[str, Any]]:
+    if not service or not mailbox_email:
+        return None
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT * FROM registrations
+        WHERE service = ? AND mailbox_email = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (service, mailbox_email),
+    )
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None

@@ -1,3 +1,4 @@
 requests
 cerebras-cloud-sdk
 keyring
+playwright

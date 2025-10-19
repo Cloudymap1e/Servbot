@@ -45,6 +45,9 @@ __all__ = [
     # Clients (for advanced usage)
     'GraphClient',
     'FlashmailClient',
+
+    # Browser automation
+    'register_service_account',
 ]
 
 
@@ -295,4 +298,140 @@ def get_account_verifications(email: str, limit: int = 20) -> List[Dict[str, any
         ...     print(f"{v['service']}: {v['value']} ({vtype})")
     """
     return get_latest_verifications(email, limit)
+
+
+# Browser automation orchestration
+
+def register_service_account(
+    *,
+    service: str,
+    website_url: str,
+    mailbox_email: str | None = None,
+    provision_new: bool = False,
+    account_type: str = "outlook",
+    headless: bool = True,
+    timeout_seconds: int = 300,
+    prefer_link: bool = True,
+    flow_config: Dict | None = None,
+    user_data_dir: str | None = None,
+    proxy: Dict | None = None,
+) -> Optional[Dict[str, any]]:
+    """Run a full registration flow for a service website using Playwright.
+
+    - Optionally provisions a new Flashmail mailbox when provision_new is True.
+    - Fills the registration form, fetches email verification via Microsoft Graph,
+      and completes the sign-up.
+    - Persists cookies/storage state and credentials into the registrations table.
+    """
+    try:
+        from .clients.flashmail import FlashmailClient
+        from .config import load_flashmail_card
+        from .core.models import EmailAccount
+        from .automation.engine import BrowserBot
+        from .automation.flows.generic import GenericEmailCodeFlow, FlowConfig
+        from .data.database import (
+            get_accounts,
+            upsert_account,
+            save_registration,
+        )
+
+        # Determine mailbox
+        email_acc: EmailAccount | None = None
+        if provision_new:
+            card = load_flashmail_card()
+            if not card:
+                return None
+            client = FlashmailClient(card)
+            accts = client.fetch_accounts(quantity=1, account_type=account_type)
+            if not accts:
+                return None
+            acct = accts[0]
+            # Persist account so Graph fetch can use it
+            upsert_account(
+                email=acct.email,
+                password=acct.password,
+                type=acct.account_type,
+                source="flashmail",
+                card=card,
+                imap_server=FlashmailClient.infer_imap_server(acct.email),
+                refresh_token=acct.refresh_token,
+                client_id=acct.client_id,
+                update_only_if_provided=False,
+            )
+            email_acc = EmailAccount(
+                email=acct.email,
+                password=acct.password,
+                account_type=acct.account_type,
+                source="flashmail",
+                imap_server=FlashmailClient.infer_imap_server(acct.email),
+                refresh_token=acct.refresh_token,
+                client_id=acct.client_id,
+            )
+        else:
+            if not mailbox_email:
+                return None
+            acc = None
+            for a in get_accounts():
+                if a['email'].lower() == mailbox_email.lower():
+                    acc = a
+                    break
+            if not acc:
+                return None
+            email_acc = EmailAccount(
+                email=acc['email'],
+                password=acc.get('password', ''),
+                account_type=acc.get('type', 'other'),
+                source=acc.get('source', 'manual'),
+                imap_server=acc.get('imap_server'),
+                refresh_token=acc.get('refresh_token'),
+                client_id=acc.get('client_id'),
+            )
+
+        if not email_acc:
+            return None
+
+        # Build flow config
+        cfg = FlowConfig(**flow_config) if flow_config else FlowConfig(
+            email_input="input[type=email], input[name=email]",
+            submit_button="button[type=submit], button:has-text('Sign up'), button:has-text('Create')",
+            otp_input="input[name=code], input[name=otp], input[type=tel]",
+            success_selector='[data-test="account-home"], .account, .dashboard'
+        )
+        flow = GenericEmailCodeFlow(
+            service_name=service,
+            entry_url=website_url,
+            config=cfg,
+        )
+
+        bot = BrowserBot(headless=headless, user_data_dir=user_data_dir, proxy=proxy, default_timeout=timeout_seconds)
+        result = bot.run_flow(flow=flow, email_account=email_acc, timeout_sec=timeout_seconds, prefer_link=prefer_link)
+
+        # Persist registration row
+        import json
+        reg_id = save_registration(
+            service=service,
+            website_url=website_url,
+            mailbox_email=email_acc.email,
+            service_username=result.service_username or "",
+            service_password=result.service_password or "",
+            status="success" if result.success else "failed",
+            error=result.error or "",
+            cookies_json=result.cookies_json or "",
+            storage_state_json=result.storage_state_json or "",
+            user_agent=result.user_agent or "",
+            profile_dir=result.profile_dir or "",
+            debug_dir=result.debug_dir or "",
+            artifacts_json=json.dumps(result.artifacts or []),
+        )
+
+        return {
+            "registration_id": reg_id,
+            "service": service,
+            "website_url": website_url,
+            "mailbox_email": email_acc.email,
+            "service_username": result.service_username,
+            "status": "success" if result.success else "failed",
+        }
+    except Exception:
+        return None
 
