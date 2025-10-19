@@ -53,7 +53,6 @@ from .api import (
     EmailAccount,
     
     # Clients (for advanced usage)
-    IMAPClient,
     GraphClient,
     FlashmailClient,
 )
@@ -80,7 +79,6 @@ __all__ = [
     'EmailAccount',
     
     # Clients
-    'IMAPClient',
     'GraphClient',
     'FlashmailClient',
     

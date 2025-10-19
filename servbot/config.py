@@ -93,6 +93,23 @@ def load_graph_account() -> Optional[Dict[str, str]]:
             pass
         
         # 3) Environment variables fallback
+        # Prefer single combined string if provided: GRAPH_ACCOUNT = "email----password----refresh_token----client_id"
+        combined = os.getenv('GRAPH_ACCOUNT')
+        if combined and '----' in combined:
+            try:
+                parts = [p.strip() for p in combined.split('----')]
+                if len(parts) == 4:
+                    email, _pw, rt, cid = parts
+                    if email and rt and cid:
+                        return {
+                            'email': email,
+                            'refresh_token': rt,
+                            'client_id': cid,
+                        }
+            except Exception:
+                pass
+        
+        # Legacy separate vars
         email = os.getenv('GRAPH_EMAIL')
         refresh_token = os.getenv('GRAPH_REFRESH_TOKEN')
         client_id = os.getenv('GRAPH_CLIENT_ID')

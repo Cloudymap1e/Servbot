@@ -129,8 +129,6 @@ class ServbotCLI:
             self.cmd_database()
         elif cmd == "cards":
             self.cmd_cards(args)
-        elif cmd == "imap-test":
-            self.cmd_imap_test(args)
         else:
             print(f"Unknown command: {cmd}")
             print("Type 'help' for available commands.")
@@ -165,8 +163,6 @@ class ServbotCLI:
         print("  cards rm <alias>      - Remove card metadata (optionally delete secret)")
         print("  cards default <alias> - Set default card alias")
         print("  cards balance         - Refresh and display balances for all cards")
-        print("\nDiagnostics:")
-        print("  imap-test <email>     - Test IMAP connectivity with sanitized logs")
         print("\nGeneral:")
         print("  help                  - Show this help message")
         print("  exit/quit             - Exit the program")
@@ -519,45 +515,19 @@ class ServbotCLI:
             print(f"Error reading database: {e}")
     
     def _fetch_codes_for_account(self, email: str):
-        """Helper to fetch verification codes for an account.
+        """Helper to fetch verification codes for an account via Microsoft Graph only.
         
         Args:
             email: Email address to fetch codes for
         """
         # Get account details from database
         accounts = get_accounts()
-        account = None
-        
-        for acc in accounts:
-            if acc['email'].lower() == email.lower():
-                account = acc
-                break
-        
+        account = next((acc for acc in accounts if acc['email'].lower() == email.lower()), None)
         if not account:
             print(f"Account not found in database: {email}")
             return
         
-        password = account.get('password')
-        imap_server = account.get('imap_server')
-        
-        if not password:
-            print("Error: Account password not available.")
-            return
-        
-        # Determine IMAP server if not set
-        if not imap_server:
-            # Prefer Flashmail proxy for Flashmail-sourced accounts
-            if (account.get('source') or '').lower() == 'flashmail':
-                imap_server = "imap.shanyouxiang.com"
-            elif 'outlook' in email.lower() or 'hotmail' in email.lower() or 'live' in email.lower():
-                imap_server = "outlook.office365.com"
-            elif 'gmail' in email.lower():
-                imap_server = "imap.gmail.com"
-            else:
-                print("Error: IMAP server not configured for this account.")
-                return
-        
-        print(f"Connecting to {imap_server}...")
+        print(f"Fetching messages for {email} via Microsoft Graph...")
         
         try:
             # First, check what messages are in the database to show fetching status
@@ -568,14 +538,12 @@ class ServbotCLI:
             before_count = cur.fetchone()[0]
             conn.close()
             
-            # Fetch verification codes
+            # Fetch verification codes (Graph-only)
             verifications = fetch_verification_codes(
-                imap_server=imap_server,
                 username=email,
-                password=password,
                 unseen_only=False,
                 limit=50,  # Increased limit
-                prefer_graph=True,  # Try Graph API first if available
+                prefer_graph=True,
             )
             
             # Check how many messages were fetched
@@ -719,69 +687,6 @@ class ServbotCLI:
 
         print("Unknown 'cards' usage. Type 'help' for commands.")
 
-    def cmd_imap_test(self, args: List[str]):
-        """Test IMAP connectivity with sanitized output/logging.
-
-        Usage: imap-test <email> [--no-ssl] [--limit 5] [--timeout 15]
-        """
-        if not args:
-            print("Usage: imap-test <email> [--no-ssl] [--limit 5] [--timeout 15]")
-            return
-        email = args[0]
-        no_ssl = '--no-ssl' in args
-        limit = 5
-        timeout = 20
-        for i, a in enumerate(args):
-            if a == '--limit' and i + 1 < len(args):
-                try:
-                    limit = int(args[i+1])
-                except ValueError:
-                    pass
-            if a == '--timeout' and i + 1 < len(args):
-                try:
-                    timeout = int(args[i+1])
-                except ValueError:
-                    pass
-        # Find account
-        accounts = get_accounts()
-        acc = next((x for x in accounts if x['email'].lower() == email.lower()), None)
-        if not acc:
-            print(f"Account not found: {email}")
-            return
-        server = acc.get('imap_server') or ('imap.shanyouxiang.com' if (acc.get('source') or '').lower() == 'flashmail' else 'outlook.office365.com')
-        password = acc.get('password') or ''
-        pw_len = len(password or '')
-        print(f"Testing IMAP for {email}\nServer: {server}\nPassword length: {pw_len}")
-        from servbot.clients import IMAPClient
-        import time
-        # Try SSL 993 unless --no-ssl
-        tried = False
-        if not no_ssl:
-            try:
-                t0 = time.time()
-                client = IMAPClient(server, email, password, port=993, use_ssl=True)
-                msgs = client.fetch_messages(folder='INBOX', unseen_only=False, limit=limit)
-                dt_ms = int((time.time()-t0)*1000)
-                print(f"SSL 993: OK ({len(msgs)} messages) in {dt_ms}ms")
-                for i, m in enumerate(msgs[:limit], 1):
-                    print(f"  {i}. {m.subject} — {m.from_addr}")
-                tried = True
-            except Exception as e:
-                print(f"SSL 993 failed: {e}")
-        # Try 143 no SSL
-        try:
-            t0 = time.time()
-            client = IMAPClient(server, email, password, port=143, use_ssl=False)
-            msgs = client.fetch_messages(folder='INBOX', unseen_only=False, limit=limit)
-            dt_ms = int((time.time()-t0)*1000)
-            print(f"No-SSL 143: OK ({len(msgs)} messages) in {dt_ms}ms")
-            for i, m in enumerate(msgs[:limit], 1):
-                print(f"  {i}. {m.subject} — {m.from_addr}")
-                tried = True
-        except Exception as e:
-            print(f"No-SSL 143 failed: {e}")
-        if not tried:
-            print("IMAP test failed for both ports.")
 
 
 def main():

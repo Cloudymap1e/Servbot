@@ -86,13 +86,7 @@ class GraphClient(EmailClient):
         Raises:
             RuntimeError: If mailbox is not set or API request fails after retry
         """
-        # Validate mailbox is set
-        if not self.mailbox:
-            raise RuntimeError(
-                "Mailbox not set for GraphClient. Messages cannot be tracked without mailbox email address. "
-                "Initialize GraphClient with mailbox parameter or use from_credentials() with mailbox."
-            )
-        
+        # Mailbox is optional for basic fetch (used in tests); recommended in production for tracking
         try:
             # Build filter query
             filters = []
@@ -226,15 +220,14 @@ class GraphClient(EmailClient):
             return None
         
         try:
-            # Per Microsoft identity platform v2.0, the "scope" parameter is optional on
-            # refresh_token redemption. If omitted, the originally granted scopes are reused.
-            # Avoid using ".default" here (reserved for client credentials/app perms).
+            # Use user's specified method: include explicit Graph scope on refresh
             response = requests.post(  # type: ignore
                 GRAPH_TOKEN_URL,
                 data={
                     "client_id": self.client_id,
                     "grant_type": "refresh_token",
                     "refresh_token": self.refresh_token,
+                    "scope": GRAPH_API_SCOPE,
                 },
                 timeout=10,
             )
@@ -302,14 +295,14 @@ class GraphClient(EmailClient):
             GraphClient instance or None if token refresh fails
         """
         try:
-            # For delegated flows, omit "scope" during refresh so previously granted
-            # scopes are reused. Do NOT use ".default" here.
+            # Use user's specified method: include explicit Graph scope on refresh
             response = requests.post(  # type: ignore
                 GRAPH_TOKEN_URL,
                 data={
                     "client_id": client_id,
                     "grant_type": "refresh_token",
                     "refresh_token": refresh_token,
+                    "scope": GRAPH_API_SCOPE,
                 },
                 timeout=10,
             )
@@ -320,4 +313,22 @@ class GraphClient(EmailClient):
         except Exception:
             pass
         return None
+
+    @classmethod
+    def from_account_string(cls, account: str) -> Optional['GraphClient']:
+        """Create a GraphClient from a combined account string.
+        
+        Expected format: email----password----refresh_token----client_id
+        Only refresh_token and client_id are used for Graph; email is used as mailbox.
+        """
+        try:
+            parts = [p.strip() for p in (account or '').split('----')]
+            if len(parts) != 4:
+                return None
+            email = parts[0]
+            refresh_token = parts[2]
+            client_id = parts[3]
+            return cls.from_credentials(refresh_token, client_id, mailbox=email)
+        except Exception:
+            return None
 

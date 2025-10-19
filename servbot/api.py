@@ -14,7 +14,7 @@ from .core.verification import (
     get_verification_for_service,
     get_latest_verification,
 )
-from .clients import IMAPClient, GraphClient, FlashmailClient
+from .clients import GraphClient, FlashmailClient
 from .data import ensure_db, upsert_account, find_verification, get_accounts, get_latest_verifications
 
 
@@ -43,7 +43,6 @@ __all__ = [
     'EmailAccount',
     
     # Clients (for advanced usage)
-    'IMAPClient',
     'GraphClient',
     'FlashmailClient',
 ]

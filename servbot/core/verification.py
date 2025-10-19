@@ -9,7 +9,7 @@ import time
 from typing import List, Optional
 
 from .models import Verification, EmailMessage
-from ..clients import IMAPClient, GraphClient
+from ..clients import GraphClient
 from ..parsers import (
     parse_verification_codes,
     parse_verification_links,
@@ -248,32 +248,7 @@ def fetch_verification_codes(
             except Exception:
                 pass  # Fall through to IMAP
     
-    # Try IMAP
-    if username and password and imap_server:
-        try:
-            # Parse Flashmail password format if needed (IMAPClient does this too, but be explicit)
-            actual_password = password.split('----')[0] if '----' in password else password
-            client = IMAPClient(imap_server, username, actual_password, port, use_ssl=ssl)
-            messages = client.fetch_messages(
-                folder=folder,
-                unseen_only=unseen_only,
-                since=since,
-                limit=limit,
-            )
-            
-            # Process messages
-            for msg in messages:
-                verifs = _process_email_for_verifications(msg, use_ai)
-                if verifs:
-                    results.extend(verifs)
-                    _save_message_and_verifications(msg, verifs)
-                    
-                    if mark_seen:
-                        client.mark_as_read(msg.message_id)
-        
-        except Exception:
-            pass
-    
+    # IMAP fallback removed – Graph-only implementation
     return _deduplicate_verifications(results)
 
 
