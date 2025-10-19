@@ -579,6 +579,12 @@ class ServbotCLI:
         if 'email_input' not in flow_config:
             flow_config['email_input'] = "input[type=email], input[name=email]"
 
+        # Quick hint if Playwright is not installed
+        try:
+            import playwright.sync_api  # type: ignore
+        except Exception:
+            print("[hint] Playwright not installed. Run: pip install playwright && python -m playwright install")
+
         # Call API orchestration
         from servbot.api import register_service_account
 
