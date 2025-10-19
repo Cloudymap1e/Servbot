@@ -190,3 +190,25 @@ def get_config(key: str, loader_func=None, default=None):
         else:
             _CONFIG_CACHE[key] = default
     return _CONFIG_CACHE[key] or default
+
+
+def load_groq_key() -> Optional[str]:
+    """Load Groq API key from env or data/ai.api.
+    Checks env: GROQ_API_KEY, GROQ_API; then data/ai.api line GROQ_API = "...".
+    """
+    import os
+    # Env first
+    key = os.getenv('GROQ_API_KEY') or os.getenv('GROQ_API')
+    if key:
+        return key.strip()
+    try:
+        ai_api_file = get_data_dir() / "ai.api"
+        if not ai_api_file.exists():
+            return None
+        content = ai_api_file.read_text()
+        for line in content.split('\n'):
+            if line.strip().startswith('GROQ_API') and '=' in line:
+                return line.split('=', 1)[1].strip().strip('"\'')
+    except Exception:
+        pass
+    return None

@@ -20,6 +20,8 @@ from ...core.models import EmailAccount
 @dataclass
 class FlowConfig:
     email_input: str
+    # Optional pre-email button to reveal email form (e.g., "Continue with email")
+    email_start_button: Optional[str] = None
     username_input: Optional[str] = None
     password_input: Optional[str] = None
     password_confirm_input: Optional[str] = None
@@ -62,6 +64,13 @@ class GenericEmailCodeFlow(RegistrationFlow):
         # Navigate to signup page
         page.goto(self.entry_url, wait_until="domcontentloaded")
         actions.screenshot("01_open")
+        # If network security block page appears, try to proceed by clicking any continue buttons if present.
+        try:
+            if page.locator("text=You've been blocked by network security").first.is_visible():
+                # Nothing actionable here; raise for retry logic upstream
+                raise RuntimeError("Blocked by network security")
+        except Exception:
+            pass
 
         # Accept cookies/banner if provided
         if self.config.accept_cookies_button:
@@ -70,8 +79,25 @@ class GenericEmailCodeFlow(RegistrationFlow):
             except Exception:
                 pass
 
-        # Fill email
-        actions.fill(self.config.email_input, email_account.email, label="email")
+        # Optional: click a start button to reveal email form
+        if self.config.email_start_button:
+            try:
+                actions.click(self.config.email_start_button, label="email_start")
+            except Exception:
+                pass
+
+        # Fill email (selector-first)
+        try:
+            actions.fill(self.config.email_input, email_account.email, label="email")
+        except Exception:
+            # Vision-assisted fallback
+            try:
+                from ..vision import VisionHelper
+                vh = VisionHelper(page)
+                if not vh.fill_by_label('email', email_account.email):
+                    raise
+            except Exception:
+                raise
 
         # Username (optional)
         chosen_username = None
@@ -92,36 +118,80 @@ class GenericEmailCodeFlow(RegistrationFlow):
 
         # Submit form
         time.sleep(self.config.pre_submit_pause_ms / 1000.0)
-        actions.click(self.config.submit_button, label="submit_form")
+        try:
+            actions.click(self.config.submit_button, label="submit_form")
+        except Exception:
+            try:
+                from ..vision import VisionHelper
+                vh = VisionHelper(page)
+                if not vh.click_submit():
+                    raise
+            except Exception:
+                raise
         time.sleep(self.config.post_submit_wait_ms / 1000.0)
 
-        # Fetch verification (code or link)
-        value = fetch_verification(self.service_name, timeout_sec, prefer_link)
+        # Fetch verification with code-first strategy and fallback to link
+        deadline = time.time() + max(1, timeout_sec)
+        value = None
+
+        # Try to fetch code first
+        remaining = int(max(1, deadline - time.time()))
+        try:
+            value = fetch_verification(self.service_name, remaining, False)
+        except Exception:
+            value = None
+
+        if not value:
+            # Fallback to link
+            remaining = int(max(1, deadline - time.time()))
+            value = fetch_verification(self.service_name, remaining, True)
         if not value:
             raise RuntimeError("Verification not received within timeout")
 
-        # If link, navigate to it for completion
-        if value.lower().startswith("http://") or value.lower().startswith("https://"):
+        # If link, navigate to it for completion; otherwise fill OTP
+        if isinstance(value, str) and (value.lower().startswith("http://") or value.lower().startswith("https://")):
             actions.screenshot("02_before_open_link")
             page.goto(value, wait_until="load")
             actions.screenshot("03_after_open_link")
         else:
-            # Code path: fill OTP inputs
-            code = value.strip()
+            # Code path: fill OTP inputs (with vision fallback)
+            code = (value or "").strip()
+            filled = False
             if self.config.otp_inputs:
-                # Fill per-digit
                 for i, sel in enumerate(self.config.otp_inputs):
                     if i < len(code):
-                        actions.fill(sel, code[i], label=f"otp_digit_{i}")
+                        try:
+                            actions.fill(sel, code[i], label=f"otp_digit_{i}")
+                            filled = True
+                        except Exception:
+                            pass
                 if self.config.otp_submit_button:
-                    actions.click(self.config.otp_submit_button, label="otp_submit")
+                    try:
+                        actions.click(self.config.otp_submit_button, label="otp_submit")
+                    except Exception:
+                        pass
             elif self.config.otp_input:
-                actions.fill(self.config.otp_input, code, label="otp_code")
+                try:
+                    actions.fill(self.config.otp_input, code, label="otp_code")
+                    filled = True
+                except Exception:
+                    filled = False
                 if self.config.otp_submit_button:
-                    actions.click(self.config.otp_submit_button, label="otp_submit")
-            else:
-                # No OTP selector provided; best-effort fallback
-                raise RuntimeError("OTP selector(s) not provided for code-based verification")
+                    try:
+                        actions.click(self.config.otp_submit_button, label="otp_submit")
+                    except Exception:
+                        pass
+            if not filled:
+                try:
+                    from ..vision import VisionHelper
+                    vh = VisionHelper(page)
+                    if vh.fill_by_label('otp', code):
+                        vh.click_submit()
+                        filled = True
+                except Exception:
+                    filled = False
+            if not filled:
+                raise RuntimeError("OTP entry failed: no suitable selector detected")
 
         # Confirm success
         if self.config.success_selector:

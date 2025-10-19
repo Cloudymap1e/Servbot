@@ -403,8 +403,46 @@ def register_service_account(
             config=cfg,
         )
 
-        bot = BrowserBot(headless=headless, user_data_dir=user_data_dir, proxy=proxy, default_timeout=timeout_seconds)
+        # First attempt
+        # Stealth headless attempt first
+        stealth_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--window-size=1280,900",
+        ]
+        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+        bot = BrowserBot(
+            headless=True,
+            user_data_dir=user_data_dir,
+            proxy=proxy,
+            default_timeout=timeout_seconds,
+            user_agent=ua,
+            args=stealth_args,
+            locale="en-US",
+        )
+        # Add common headers
+        bot.extra_headers = {
+            "Accept-Language": "en-US,en;q=0.9",
+            "Upgrade-Insecure-Requests": "1",
+        }
         result = bot.run_flow(flow=flow, email_account=email_acc, timeout_sec=timeout_seconds, prefer_link=prefer_link)
+
+        # If concealment fails, fallback to headed complete mode
+        if not result.success:
+            try:
+                bot2 = BrowserBot(
+                    headless=False,
+                    user_data_dir=user_data_dir,
+                    proxy=proxy,
+                    default_timeout=timeout_seconds,
+                    user_agent=ua,
+                    args=stealth_args,
+                    locale="en-US",
+                )
+                bot2.extra_headers = bot.extra_headers
+                result = bot2.run_flow(flow=flow, email_account=email_acc, timeout_sec=timeout_seconds, prefer_link=prefer_link)
+            except Exception:
+                pass
 
         # Persist registration row
         import json
@@ -432,6 +470,12 @@ def register_service_account(
             "service_username": result.service_username,
             "status": "success" if result.success else "failed",
         }
-    except Exception:
+    except Exception as e:
+        try:
+            import traceback
+            print(f"[register_service_account ERROR] {e}")
+            traceback.print_exc()
+        except Exception:
+            pass
         return None
 

@@ -48,10 +48,11 @@ class RegistrationResult:
 class ActionHelper:
     """Helper to perform actions with debug screenshots and red-outline highlights."""
 
-    def __init__(self, page, debug_dir: str):
+    def __init__(self, page, debug_dir: str, on_activity: Optional[Callable[[], None]] = None):
         self.page = page
         self.debug_dir = debug_dir
         self.artifacts: List[str] = []
+        self._on_activity = on_activity
         self._ensure_dir()
         self._install_highlight_css()
 
@@ -104,6 +105,8 @@ class ActionHelper:
         try:
             self.page.screenshot(path=path, full_page=True)
             self.artifacts.append(path)
+            if self._on_activity:
+                self._on_activity()
         except Exception:
             pass
         return path
@@ -116,6 +119,8 @@ class ActionHelper:
         # leave highlighted briefly for context
         self.screenshot(f"after_{label}")
         self._unhighlight(selector)
+        if self._on_activity:
+            self._on_activity()
 
     def fill(self, selector: str, value: str, label: str = "fill"):
         self.page.wait_for_selector(selector, state="visible")
@@ -124,6 +129,8 @@ class ActionHelper:
         self.page.fill(selector, value)
         self.screenshot(f"after_{label}")
         self._unhighlight(selector)
+        if self._on_activity:
+            self._on_activity()
 
 
 class RegistrationFlow:
@@ -153,11 +160,26 @@ class BrowserBot:
         user_data_dir: Optional[str] = None,
         proxy: Optional[Dict[str, str]] = None,
         default_timeout: int = 300,
+        channel: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        args: Optional[List[str]] = None,
+        is_mobile: bool = False,
+        has_touch: bool = False,
+        locale: Optional[str] = "en-US",
+        idle_timeout_sec: int = 10,
     ):
         self.headless = headless
         self.user_data_dir = user_data_dir
         self.proxy = proxy
         self.default_timeout = default_timeout
+        self.channel = channel
+        self.user_agent = user_agent
+        self.args = args or []
+        self.is_mobile = is_mobile
+        self.has_touch = has_touch
+        self.locale = locale
+        self.idle_timeout_sec = idle_timeout_sec
+        self.extra_headers: Optional[Dict[str, str]] = None
         # session debug directory
         base = os.path.join(os.path.dirname(__file__), "..", "data", "screenshots")
         base = os.path.abspath(base)
@@ -205,18 +227,74 @@ class BrowserBot:
 
         with sync_playwright() as p:
             user_dir = self.user_data_dir or tempfile.mkdtemp(prefix="servbot-profile-")
-            context = p.chromium.launch_persistent_context(
-                user_dir,
+            last_activity = time.time()
+            def _touch():
+                nonlocal last_activity
+                last_activity = time.time()
+            launch_kwargs = dict(
+                user_data_dir=user_dir,
                 headless=self.headless,
                 proxy=self.proxy,
-                viewport={"width": 1280, "height": 900},
+                viewport={"width": 1280, "height": 900} if not self.is_mobile else {"width": 390, "height": 844},
+                is_mobile=self.is_mobile,
+                has_touch=self.has_touch,
+                locale=self.locale,
                 accept_downloads=True,
+                user_agent=self.user_agent,
+                args=self.args,
+                extra_http_headers=self.extra_headers,
             )
+            if self.channel:
+                context = p.chromium.launch_persistent_context(channel=self.channel, **launch_kwargs)
+            else:
+                # Playwright's signature expects user_data_dir as first positional
+                context = p.chromium.launch_persistent_context(
+                    user_dir,
+                    headless=self.headless,
+                    proxy=self.proxy,
+                    viewport={"width": 1280, "height": 900},
+                    accept_downloads=True,
+                    user_agent=self.user_agent,
+                    args=self.args,
+                )
             page = context.new_page()
-            # Cap step timeout to 60s
-            page.set_default_timeout(min(self.default_timeout * 1000, 60000))
+            # Stealth init scripts (mask automation hints)
+            try:
+                page.add_init_script(
+                    """
+                    // webdriver
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    // chrome runtime
+                    window.chrome = { runtime: {} };
+                    // languages
+                    Object.defineProperty(navigator, 'languages', { get: () => ['en-US','en'] });
+                    // plugins
+                    Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
+                    // permissions
+                    const originalQuery = window.navigator.permissions && window.navigator.permissions.query;
+                    if (originalQuery) {
+                      window.navigator.permissions.query = (parameters) => (
+                        parameters.name === 'notifications' ? Promise.resolve({ state: 'denied' }) : originalQuery(parameters)
+                      );
+                    }
+                    // WebGL vendor/renderer
+                    const getParameter = WebGLRenderingContext.prototype.getParameter;
+                    WebGLRenderingContext.prototype.getParameter = function (parameter) {
+                      if (parameter === 37445) return 'Intel Inc.'; // UNMASKED_VENDOR_WEBGL
+                      if (parameter === 37446) return 'Intel(R) UHD Graphics'; // UNMASKED_RENDERER_WEBGL
+                      return getParameter.apply(this, [parameter]);
+                    };
+                    // hardware
+                    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });
+                    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+                    """
+                )
+            except Exception:
+                pass
+            # Cap step timeout to 10s per user requirement
+            page.set_default_timeout(10000)
 
-            actions = ActionHelper(page, self.session_debug_dir)
+            actions = ActionHelper(page, self.session_debug_dir, on_activity=_touch)
 
             try:
                 result = flow.perform_registration(

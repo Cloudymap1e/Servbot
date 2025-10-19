@@ -1,0 +1,10 @@
+{
+  "email_start_button": "button:has-text('Continue with email'), button:has-text('Sign up with email'), button:has-text('Continue')",
+  "email_input": "input[type=email], input[name=email], input[autocomplete='email']",
+  "accept_cookies_button": "#onetrust-accept-btn-handler, button#onetrust-accept-btn-handler, button:has-text('Accept all'), button:has-text('Accept')",
+  "submit_button": "button:has-text('Continue'), button[type=submit], button:has-text('Sign up')",
+  "otp_input": "input[autocomplete='one-time-code'], input[type=tel], input[name=code], input[name=otp], input[id*='code' i], input[name*='code' i], input[aria-label*='验证码'], input[placeholder*='验证码']",
+  "otp_submit_button": "button:has-text('继续'), button:has-text('Continue'), [role='button']:has-text('继续')",
+  "pre_submit_pause_ms": 1200,
+  "post_submit_wait_ms": 6000
+}

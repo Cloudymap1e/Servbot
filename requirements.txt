@@ -2,3 +2,5 @@ requests
 cerebras-cloud-sdk
 keyring
 playwright
+opencv-python
+openai

@@ -78,15 +78,32 @@ def parse_verification_codes(
             seen.add(code)
             unique.append(code)
     
-    # AI fallback if no codes found
-    if not unique and use_ai_fallback and email_subject and from_addr:
+    # AI fallback and Groq enhancement
+    if use_ai_fallback and email_subject and from_addr:
+        ai_code: Optional[str] = None
         try:
             from .ai_parser import extract_with_ai
             ai_result = extract_with_ai(email_subject, email_body or text, from_addr)
-            if ai_result and ai_result.get('code'):
-                unique.append(ai_result['code'])
+            if ai_result and isinstance(ai_result.get('code'), str):
+                c = ai_result['code'].strip()
+                if c.isdigit() and 4 <= len(c) <= 8:
+                    ai_code = c
+        except Exception:
+            ai_code = None
+        # Try Groq if no good code yet or to override with 6-digit
+        try:
+            from ..ai.groq import extract_with_groq
+            g = extract_with_groq(email_subject, email_body or text, from_addr)
+            if g and g.get('code'):
+                ai_code = g['code']  # enforce 6-digit numeric per groq client
         except Exception:
             pass
+        if ai_code:
+            # Prefer AI if our first candidate isn't 6-digit
+            if not unique or not (unique[0].isdigit() and len(unique[0]) == 6):
+                unique.insert(0, ai_code)
+            elif ai_code not in unique:
+                unique.append(ai_code)
     
     return unique
 
