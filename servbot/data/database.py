@@ -790,3 +790,5 @@ def get_registration(service: str, mailbox_email: str) -> Optional[Dict[str, Any
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
+
+# --- Event logging (appended) ---

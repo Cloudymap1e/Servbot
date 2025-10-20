@@ -86,3 +86,8 @@ __all__ = [
     '__version__',
 ]
 
+# Auto-instrumentation
+try:
+    from . import instrumentation as _inst  # noqa: F401
+except Exception:
+    _inst = None  # type: ignore
