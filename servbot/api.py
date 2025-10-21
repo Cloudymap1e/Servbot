@@ -310,6 +310,11 @@ def register_service_account(
     flow_config: Dict | None = None,
     user_data_dir: str | None = None,
     proxy: Dict | None = None,
+    # Traffic/minify options
+    traffic_profile: str | None = None,
+    block_third_party: bool = False,
+    allowed_domains: List[str] | None = None,
+    measure_network: bool = False,
 ) -> Optional[Dict[str, any]]:
     """Run a full registration flow for a service website using Playwright.
 
@@ -403,6 +408,10 @@ def register_service_account(
             "--window-size=1280,900",
         ]
         ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+        # Reddit allowlist default if requested
+        if (traffic_profile or "").lower() in ("minimal", "ultra") and block_third_party and not allowed_domains:
+            if ("reddit" in service.lower()) or ("reddit" in website_url.lower()):
+                allowed_domains = ["reddit.com", "redditstatic.com", "redditmedia.com", "redd.it"]
         bot = BrowserBot(
             headless=True,
             user_data_dir=user_data_dir,
@@ -411,6 +420,11 @@ def register_service_account(
             user_agent=ua,
             args=stealth_args,
             locale="en-US",
+            traffic_profile=(traffic_profile or None),
+            block_third_party=block_third_party,
+            allowed_domains=allowed_domains,
+            measure_network=measure_network,
+            disable_debug_artifacts=True if measure_network else False,
         )
         # Add common headers
         bot.extra_headers = {
@@ -430,6 +444,11 @@ def register_service_account(
                     user_agent=ua,
                     args=stealth_args,
                     locale="en-US",
+                    traffic_profile=(traffic_profile or None),
+                    block_third_party=block_third_party,
+                    allowed_domains=allowed_domains,
+                    measure_network=measure_network,
+                    disable_debug_artifacts=True if measure_network else False,
                 )
                 bot2.extra_headers = bot.extra_headers
                 result = bot2.run_flow(flow=flow, email_account=email_acc, timeout_sec=timeout_seconds, prefer_link=prefer_link)

@@ -326,6 +326,379 @@ The proxy module provides comprehensive logging at multiple levels:
 - **Concurrency limit enforcement per provider**
 - **Multiple proxy types, IP versions, and rotation strategies**
 
+## Proxy Testing
+
+### Testing Individual Proxies
+
+```python
+from servbot.proxy import ProxyManager, load_provider_configs
+from servbot.proxy.tester import ProxyTester
+
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs)
+
+# Acquire proxy
+endpoint = pm.acquire(name='mooproxy-us')
+
+# Test it
+result = ProxyTester.test_single_proxy(
+    endpoint,
+    test_url='http://httpbin.org/ip',
+    timeout=10
+)
+
+print(f"Success: {result.success}")
+print(f"Response time: {result.response_time_ms}ms")
+print(f"IP: {result.response_ip}")
+
+# Release
+pm.release(endpoint)
+```
+
+### Batch Testing
+
+```python
+from servbot.proxy import ProxyManager, load_provider_configs
+from servbot.proxy.tester import ProxyTester
+
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs)
+
+# Acquire multiple proxies
+endpoints = []
+for i in range(10):
+    endpoints.append(pm.acquire(name='brightdata-resi'))
+
+# Test in parallel
+results = ProxyTester.test_batch(
+    endpoints,
+    test_url='http://httpbin.org/ip',
+    timeout=10,
+    max_workers=10
+)
+
+# Print summary
+ProxyTester.print_test_summary(results)
+
+# Release all
+for endpoint in endpoints:
+    pm.release(endpoint)
+```
+
+### Testing Before Production
+
+```python
+import json
+from servbot.proxy import load_provider_configs, ProxyManager
+from servbot.proxy.tester import ProxyTester
+
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs)
+
+# Test each provider
+for config in configs:
+    print(f"\nTesting provider: {config.name}")
+    
+    # Acquire 5 proxies
+    endpoints = []
+    try:
+        for i in range(5):
+            endpoints.append(pm.acquire(name=config.name))
+    except Exception as e:
+        print(f"  Failed to acquire: {e}")
+        continue
+    
+    # Test
+    results = ProxyTester.test_batch(endpoints, max_workers=5)
+    
+    # Analyze
+    successful = sum(1 for r in results if r.success)
+    if successful > 0:
+        avg_time = sum(r.response_time_ms for r in results if r.success) / successful
+        print(f"  Success rate: {successful}/{len(results)}")
+        print(f"  Avg response time: {avg_time:.0f}ms")
+    
+    # Save results
+    with open(f'proxy_test_{config.name}.json', 'w') as f:
+        json.dump([r.to_dict() for r in results], f, indent=2)
+    
+    # Release
+    for endpoint in endpoints:
+        pm.release(endpoint)
+```
+
+### Continuous Monitoring
+
+```python
+import time
+from servbot.proxy import ProxyManager, load_provider_configs
+from servbot.proxy.tester import ProxyTester
+
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs, enable_metering=True)
+
+def monitor_proxies(interval_seconds=300):
+    """Monitor proxy health every interval_seconds."""
+    while True:
+        stats = pm.get_stats()
+        
+        for provider_name in stats['providers']:
+            endpoint = pm.acquire(name=provider_name)
+            result = ProxyTester.test_single_proxy(endpoint)
+            
+            if result.success:
+                print(f"[{provider_name}] OK - {result.response_time_ms:.0f}ms")
+            else:
+                print(f"[{provider_name}] FAIL - {result.error}")
+            
+            pm.release(endpoint)
+        
+        time.sleep(interval_seconds)
+
+# Run monitoring
+monitor_proxies()
+```
+
+## Integration with Browser Automation
+
+### Basic Integration
+
+```python
+from servbot.proxy import load_provider_configs, ProxyManager
+from servbot import register_service_account
+
+# Setup proxies
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs, enable_metering=True)
+
+# Acquire proxy
+endpoint = pm.acquire(region='US', purpose='reddit-registration')
+
+# Use in browser automation
+result = register_service_account(
+    service="Reddit",
+    website_url="https://www.reddit.com/register",
+    provision_new=True,
+    proxy=endpoint.as_playwright_proxy(),
+    traffic_profile="minimal"
+)
+
+# Release proxy
+pm.release(endpoint, reason='complete')
+```
+
+### Advanced: Retry with Different Proxies
+
+```python
+from servbot.proxy import load_provider_configs, ProxyManager
+from servbot import register_service_account
+
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs)
+
+max_retries = 3
+endpoint = None
+
+for attempt in range(max_retries):
+    try:
+        # Acquire new proxy for each attempt
+        if endpoint:
+            pm.release(endpoint, reason='failed')
+        endpoint = pm.acquire(region='US')
+        
+        # Attempt registration
+        result = register_service_account(
+            service="Reddit",
+            website_url="https://www.reddit.com/register",
+            provision_new=True,
+            proxy=endpoint.as_playwright_proxy(),
+            traffic_profile="minimal"
+        )
+        
+        if result and result['status'] == 'success':
+            pm.release(endpoint, reason='success')
+            print(f"✓ Success on attempt {attempt + 1}")
+            break
+    except Exception as e:
+        print(f"✗ Attempt {attempt + 1} failed: {e}")
+```
+
+### Proxy Rotation Strategy
+
+```python
+from servbot.proxy import load_provider_configs, ProxyManager
+from servbot import register_service_account
+
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs, enable_metering=True)
+
+# Register 100 accounts with automatic proxy rotation
+for i in range(100):
+    # Auto-select cheapest available proxy
+    endpoint = pm.acquire(region='US', purpose=f'registration-{i}')
+    
+    try:
+        result = register_service_account(
+            service="Reddit",
+            website_url="https://www.reddit.com/register",
+            provision_new=True,
+            proxy=endpoint.as_playwright_proxy(),
+            traffic_profile="minimal",
+            measure_network=True
+        )
+        
+        if result and result['status'] == 'success':
+            pm.release(endpoint, reason='success')
+            print(f"[{i+1}/100] ✓ Success")
+        else:
+            pm.release(endpoint, reason='failed')
+            print(f"[{i+1}/100] ✗ Failed")
+    except Exception as e:
+        pm.release(endpoint, reason='error')
+        print(f"[{i+1}/100] ✗ Error: {e}")
+    
+    # View progress
+    if (i + 1) % 10 == 0:
+        stats = pm.get_stats()
+        summary = stats['usage_summary']
+        print(f"\n=== Progress Report ({i+1}/100) ===")
+        print(f"Total data: {summary['total_gb']:.4f} GB")
+        print(f"Estimated cost: ${summary['total_cost_estimate']:.2f}")
+        print(f"Avg per registration: {summary['total_gb']/summary['total_requests']:.4f} GB\n")
+```
+
+## Best Practices
+
+### 1. Cost Optimization
+
+```python
+# Use auto-selection to pick cheapest provider
+endpoint = pm.acquire()  # Automatically selects cheapest
+
+# OR manually choose datacenter for non-critical tasks
+endpoint = pm.acquire(name='datacenter-cheap')
+
+# Reserve expensive residential for critical tasks
+endpoint = pm.acquire(name='brightdata-resi', purpose='important-task')
+```
+
+### 2. Concurrency Management
+
+```python
+# Set limits in config
+{
+  "name": "brightdata-resi",
+  "concurrency_limit": 100,  # Max 100 concurrent connections
+  ...
+}
+
+# Handle concurrency errors
+try:
+    endpoint = pm.acquire(name='brightdata-resi')
+except RuntimeError as e:
+    if "Concurrency limit reached" in str(e):
+        print("Too many active connections, waiting...")
+        time.sleep(5)
+        endpoint = pm.acquire(name='brightdata-resi')
+```
+
+### 3. Error Handling
+
+```python
+from servbot.proxy import ProxyManager, load_provider_configs
+from servbot.proxy.tester import ProxyTester
+
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs)
+
+def acquire_tested_proxy(provider_name, max_attempts=3):
+    """Acquire and test proxy before use."""
+    for attempt in range(max_attempts):
+        endpoint = pm.acquire(name=provider_name)
+        
+        # Test proxy
+        result = ProxyTester.test_single_proxy(endpoint, timeout=5)
+        
+        if result.success:
+            return endpoint
+        else:
+            pm.release(endpoint, reason='test-failed')
+            print(f"Proxy test failed (attempt {attempt + 1}): {result.error}")
+    
+    raise RuntimeError(f"Failed to acquire working proxy after {max_attempts} attempts")
+
+# Use it
+endpoint = acquire_tested_proxy('mooproxy-us')
+# ... use endpoint ...
+pm.release(endpoint)
+```
+
+### 4. Regional Targeting
+
+```python
+# Target specific regions for better relevance
+us_endpoint = pm.acquire(region='US', purpose='us-registration')
+uk_endpoint = pm.acquire(region='GB', purpose='uk-registration')
+```
+
+### 5. Metric Tracking
+
+```python
+# Enable metering for all production usage
+pm = ProxyManager(configs, enable_metering=True)
+
+# Regularly check usage
+stats = pm.get_stats()
+summary = stats['usage_summary']
+
+if summary['total_cost_estimate'] > 100:  # $100 threshold
+    print("WARNING: Proxy costs exceeding budget!")
+```
+
+## Troubleshooting
+
+### "Proxy provider not found"
+
+**Cause:** Provider name in `acquire()` doesn't match config.
+
+**Solution:**
+```python
+# List available providers
+stats = pm.get_stats()
+print("Available providers:", list(stats['providers'].keys()))
+```
+
+### "Concurrency limit reached"
+
+**Cause:** Too many active connections to a provider.
+
+**Solution:**
+- Increase `concurrency_limit` in config
+- Release proxies when done: `pm.release(endpoint)`
+- Use different provider: `pm.acquire()  # auto-selects`
+
+### Proxy Test Failures
+
+**Cause:** Proxy credentials invalid, network issues, or proxy provider down.
+
+**Solution:**
+1. Verify credentials in config
+2. Check environment variables
+3. Test manually with curl:
+   ```bash
+   curl -x http://user:pass@proxy:port http://httpbin.org/ip
+   ```
+
+### High Costs
+
+**Cause:** Inefficient bandwidth usage.
+
+**Solution:**
+- Enable traffic profiles: `traffic_profile="minimal"`
+- Use network metering: `measure_network=True`
+- Switch to cheaper providers for non-critical tasks
+- Optimize allowlists to reduce third-party requests
+
 ## API Reference
 
 ### ProxyManager
@@ -345,6 +718,13 @@ The proxy module provides comprehensive logging at multiple levels:
 - `get_metrics(provider=None)` - Get metrics, optionally filtered by provider
 - `get_summary()` - Get aggregated summary
 
+### ProxyTester
+
+**Methods:**
+- `test_single_proxy(endpoint, test_url, timeout)` - Test a single proxy
+- `test_batch(endpoints, test_url, timeout, max_workers, progress_callback)` - Test multiple proxies in parallel
+- `print_test_summary(results)` - Print formatted summary of test results
+
 ### ProxyEndpoint
 
 **Attributes:**
@@ -361,3 +741,9 @@ The proxy module provides comprehensive logging at multiple levels:
 **Methods:**
 - `as_requests_proxies()` - Format for requests library
 - `as_playwright_proxy()` - Format for Playwright
+
+## See Also
+
+- [Browser Automation Guide](BROWSER_AUTOMATION.md)
+- [Network Metering Guide](NETWORK_METERING.md)
+- [Main README](../README.md)

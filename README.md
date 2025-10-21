@@ -1,15 +1,43 @@
 # Servbot - Email Verification Code Extraction System
 
-A comprehensive, production-ready email automation tool for fetching and extracting verification codes from emails.
+A comprehensive, production-ready email automation tool for fetching and extracting verification codes from emails, with advanced browser automation capabilities for complete service registration workflows.
 
 ## Features
 
+### Core Email Features
 - **Multi-Protocol Support**: IMAP and Microsoft Graph API
 - **Intelligent Parsing**: Regex patterns with AI fallback (Cerebras)
 - **100+ Services**: Pre-configured patterns for popular services
 - **Account Provisioning**: Integration with Flashmail/Shanyouxiang API
 - **Database Persistence**: SQLite storage for messages and verifications
+
+### Browser Automation (NEW!)
+- **Automated Registration**: Complete signup flows for websites using Playwright
+- **Vision-Assisted Forms**: Intelligent form filling with fallback mechanisms
+- **Email Verification Integration**: Automatic verification code retrieval and submission
+- **Traffic Optimization**: Minimal/ultra modes for bandwidth reduction
+- **Session Persistence**: Cookie and storage state management
+- **Debug Artifacts**: Screenshot capture with visual element highlighting
+
+### Proxy Management (NEW!)
+- **Multi-Provider Support**: Static lists, BrightData, MooProxy
+- **Advanced Metering**: Detailed usage tracking and cost estimation
+- **Concurrency Control**: Per-provider connection limits
+- **Proxy Types**: Residential, datacenter, ISP, and mobile proxies
+- **Region Targeting**: Country/city-based proxy selection
+- **Comprehensive Testing**: Built-in proxy testing and validation
+
+### Network Optimization (NEW!)
+- **Traffic Profiling**: Minimal and ultra modes for bandwidth reduction
+- **Network Metering**: Real-time bandwidth tracking via Chrome DevTools Protocol
+- **Third-Party Blocking**: Selective domain allowlisting
+- **Analytics Blocking**: Automatic blocking of telemetry and tracking
+- **Resource Filtering**: Image, font, stylesheet, and media blocking
+
+### Architecture
 - **Clean Architecture**: Modular, well-documented, Google Style compliant
+- **Type Safety**: Comprehensive type hints throughout
+- **Extensible Design**: Easy to add new providers, flows, and parsers
 
 ## Installation
 
@@ -63,6 +91,26 @@ verifications = fetch_verification_codes(
 )
 ```
 
+### Browser Automation
+
+Automate complete registration flows with built-in verification:
+
+```python
+from servbot import register_service_account
+
+result = register_service_account(
+    service="Reddit",
+    website_url="https://www.reddit.com/register",
+    provision_new=True,  # Auto-provision new email
+    traffic_profile="minimal",  # Reduce bandwidth usage
+    measure_network=True  # Track bandwidth consumption
+)
+
+if result:
+    print(f"✓ Account created: {result['mailbox_email']}")
+    print(f"✓ Status: {result['status']}")
+```
+
 ## Quick Start
 
 ### Basic Usage
@@ -114,6 +162,64 @@ if result:
     print(f"Code: {result['value']}")
 ```
 
+### Browser Automation - Complete Registration Flow
+
+```python
+from servbot import register_service_account
+
+# Automated registration with all features
+result = register_service_account(
+    service="Reddit",
+    website_url="https://www.reddit.com/register",
+    provision_new=True,              # Auto-provision email from Flashmail
+    headless=True,                   # Run in headless mode
+    traffic_profile="minimal",       # Reduce bandwidth (blocks images, fonts, etc.)
+    block_third_party=True,          # Block third-party domains
+    allowed_domains=["reddit.com"],  # Allowlist for third-party blocking
+    measure_network=True,            # Measure bandwidth consumption
+    timeout_seconds=300
+)
+
+if result and result['status'] == 'success':
+    print(f"✓ Registration successful!")
+    print(f"  Email: {result['mailbox_email']}")
+    print(f"  Username: {result['service_username']}")
+    print(f"  Registration ID: {result['registration_id']}")
+```
+
+### Proxy Management
+
+```python
+from servbot.proxy import load_provider_configs, ProxyManager
+
+# Load proxy configurations
+configs = load_provider_configs('config/proxies.json')
+pm = ProxyManager(configs, enable_metering=True)
+
+# Acquire proxy (auto-selects cheapest)
+endpoint = pm.acquire(region='US', purpose='registration')
+
+# Use with browser automation
+result = register_service_account(
+    service="Reddit",
+    website_url="https://www.reddit.com/register",
+    proxy=endpoint.as_playwright_proxy(),
+    provision_new=True
+)
+
+# Release proxy when done
+pm.release(endpoint, reason='complete')
+
+# Get usage statistics
+stats = pm.get_stats()
+print(f"Active connections: {stats['total_active']}")
+if 'usage_summary' in stats:
+    summary = stats['usage_summary']
+    print(f"Total requests: {summary['total_requests']}")
+    print(f"Total data: {summary['total_gb']} GB")
+    print(f"Estimated cost: ${summary['total_cost_estimate']}")
+```
+
 ## Architecture
 
 ### Directory Structure
@@ -126,26 +232,26 @@ servbot/
 ├── cli.py                # Interactive CLI implementation
 ├── main.py               # Direct CLI entry point
 ├── config.py             # Configuration loader
-�?
+�?
 ├── core/                 # Core business logic
-�?  ├── __init__.py
-�?  ├── models.py         # Data classes (Verification, EmailAccount)
-�?  └── verification.py   # Verification extraction logic
-�?
+�?  ├── __init__.py
+�?  ├── models.py         # Data classes (Verification, EmailAccount)
+�?  └── verification.py   # Verification extraction logic
+�?
 ├── clients/              # Email client implementations
-�?  ├── __init__.py
-�?  ├── base.py           # Abstract base client
-�?  ├── imap.py           # IMAP client
-�?  ├── graph.py          # Microsoft Graph API client
-�?  └── flashmail.py      # Flashmail/Shanyou API client
-�?
+�?  ├── __init__.py
+�?  ├── base.py           # Abstract base client
+�?  ├── imap.py           # IMAP client
+�?  ├── graph.py          # Microsoft Graph API client
+�?  └── flashmail.py      # Flashmail/Shanyou API client
+�?
 ├── parsers/              # Content parsing modules
-�?  ├── __init__.py
-�?  ├── code_parser.py    # Regex-based code extraction
-�?  ├── email_parser.py   # Email structure parsing
-�?  ├── service_parser.py # Service identification
-�?  └── ai_parser.py      # AI-powered fallback
-�?
+�?  ├── __init__.py
+�?  ├── code_parser.py    # Regex-based code extraction
+�?  ├── email_parser.py   # Email structure parsing
+�?  ├── service_parser.py # Service identification
+�?  └── ai_parser.py      # AI-powered fallback
+�?
 └── data/                 # Data layer
     ├── __init__.py
     ├── services.py       # Service catalog (100+ services)
@@ -214,6 +320,56 @@ Provisions Flashmail account and fetches verification.
 - `prefer_link` (bool): Prefer links (default: True)
 
 **Returns:** `Optional[Dict]` with keys: email, password, service, value, is_link
+
+#### `register_service_account()` (NEW!)
+
+Runs a complete automated registration flow for a service website using Playwright.
+
+**Parameters:**
+- `service` (str): Service name (for identification)
+- `website_url` (str): Registration page URL
+- `mailbox_email` (str | None): Existing email to use (default: None)
+- `provision_new` (bool): Auto-provision new Flashmail email (default: False)
+- `account_type` (str): "outlook" or "hotmail" for new accounts (default: "outlook")
+- `headless` (bool): Run browser in headless mode (default: True)
+- `timeout_seconds` (int): Maximum time for registration (default: 300)
+- `prefer_link` (bool): Prefer verification links over codes (default: True)
+- `flow_config` (Dict | None): Custom FlowConfig for form selectors
+- `user_data_dir` (str | None): Browser profile directory
+- `proxy` (Dict | None): Proxy configuration (Playwright format)
+- `traffic_profile` (str | None): Traffic optimization mode: "off", "minimal", "ultra" (default: None)
+- `block_third_party` (bool): Block third-party domains (default: False)
+- `allowed_domains` (List[str] | None): Allowlist for third-party blocking
+- `measure_network` (bool): Enable network traffic metering (default: False)
+
+**Returns:** `Optional[Dict]` with keys:
+- `registration_id` (int): Database ID for this registration
+- `service` (str): Service name
+- `website_url` (str): Registration URL
+- `mailbox_email` (str): Email used for registration
+- `service_username` (str): Created username on service
+- `status` (str): "success" or "failed"
+
+**Example:**
+```python
+result = register_service_account(
+    service="Reddit",
+    website_url="https://www.reddit.com/register",
+    provision_new=True,
+    traffic_profile="minimal",
+    block_third_party=True,
+    allowed_domains=["reddit.com"],
+    measure_network=True
+)
+```
+
+**Traffic Profiles:**
+- **off** (default): No traffic optimization
+- **minimal**: Blocks images, fonts, media, analytics; enables Save-Data header
+- **ultra**: Blocks images, fonts, media, stylesheets, analytics; enables Save-Data header
+
+**Third-Party Blocking:**
+When `block_third_party=True`, only requests to `allowed_domains` are permitted. Reddit uses a default allowlist if not specified: `["reddit.com", "redditstatic.com", "redditmedia.com", "redd.it"]`
 
 ### Models
 
@@ -321,6 +477,65 @@ upsert_graph_account(
 )
 ```
 
+### Proxy Configuration (NEW!)
+
+Create `config/proxies.json` for proxy providers:
+
+```json
+[
+  {
+    "name": "brightdata-resi",
+    "type": "brightdata",
+    "price_per_gb": 12.0,
+    "concurrency_limit": 100,
+    "options": {
+      "host": "zproxy.lum-superproxy.io",
+      "port": "22225",
+      "username": "env:BRIGHTDATA_USERNAME",
+      "password": "env:BRIGHTDATA_PASSWORD",
+      "country": "US",
+      "proxy_type": "residential",
+      "ip_version": "ipv4"
+    }
+  },
+  {
+    "name": "mooproxy-us",
+    "type": "mooproxy",
+    "price_per_gb": 5.0,
+    "concurrency_limit": 20,
+    "options": {
+      "host": "us.mooproxy.net",
+      "port": "55688",
+      "username": "your-username",
+      "password": "your-password",
+      "country": "US",
+      "proxy_type": "residential",
+      "ip_version": "ipv4"
+    }
+  }
+]
+```
+
+**Environment Variables for Secrets:**
+Use `"env:VAR_NAME"` syntax to reference environment variables for sensitive data.
+
+**See [docs/PROXIES.md](docs/PROXIES.md) for complete proxy documentation.**
+
+### Browser Automation Setup
+
+Install Playwright browsers:
+
+```bash
+playwright install chromium
+```
+
+Or use the built-in installer:
+
+```python
+from servbot.automation.engine import mcp_cursor_playwright_browser_install
+# Browser will be installed automatically on first use
+```
+
 ## Service Catalog
 
 Servbot includes pre-configured patterns for 100+ popular services:
@@ -337,10 +552,12 @@ Servbot includes pre-configured patterns for 100+ popular services:
 
 Servbot automatically maintains a SQLite database (`data/servbot.db`) storing:
 
-- **accounts**: Provisioned email accounts
+- **accounts**: Provisioned email accounts (with Graph API credentials)
 - **messages**: Fetched email messages
 - **verifications**: Extracted verification codes/links
-- **graph_accounts**: Microsoft Graph credentials
+- **graph_accounts**: Legacy Microsoft Graph credentials
+- **registrations** (NEW!): Browser automation registration results and artifacts
+- **flashmail_cards** (NEW!): Flashmail API card metadata (secrets stored in keyring)
 
 ## Error Handling
 
@@ -367,11 +584,39 @@ pytest tests/
 
 ## Best Practices
 
-1. **Environment Variables**: Store credentials in environment variables
+### Email Operations
+1. **Environment Variables**: Store credentials in environment variables or secure keyring
 2. **Rate Limiting**: Respect email server rate limits (use `limit` parameter)
 3. **Mark As Read**: Use `mark_seen=True` to avoid reprocessing
 4. **Database**: Regularly backup `data/servbot.db`
 5. **AI Usage**: AI fallback has API costs; disable with `use_ai=False` if needed
+
+### Browser Automation
+1. **Headless First**: Start with headless mode; use headed mode only for debugging
+2. **Traffic Profiles**: Use `"minimal"` or `"ultra"` to reduce bandwidth costs when using proxies
+3. **Network Metering**: Enable `measure_network=True` to track actual bandwidth consumption
+4. **Stealth Features**: BrowserBot includes anti-detection measures (webdriver masking, realistic headers)
+5. **Debug Artifacts**: Screenshots with red outlines are saved to `data/screenshots/run-*` directories
+6. **Timeout Management**: Default step timeout is 10s; adjust `timeout_seconds` for slow networks
+7. **Session Persistence**: Reuse `user_data_dir` to maintain login state across runs
+
+### Proxy Management
+1. **Cost Tracking**: Enable metering with `ProxyManager(configs, enable_metering=True)`
+2. **Concurrency Limits**: Set `concurrency_limit` in config to prevent overloading providers
+3. **Auto-Selection**: Omit `name` parameter in `acquire()` to auto-select cheapest provider
+4. **Regional Targeting**: Specify `region` parameter for location-specific proxies
+5. **Testing**: Use `ProxyTester.test_batch()` to validate proxies before production use
+6. **Environment Secrets**: Use `"env:VAR_NAME"` syntax in config for sensitive credentials
+7. **Release Proxies**: Always call `pm.release()` to properly track usage and free concurrency slots
+
+### Network Optimization
+1. **Profile Selection**:
+   - **off**: Normal browsing (default)
+   - **minimal**: ~60-80% bandwidth reduction (blocks images, fonts, media)
+   - **ultra**: ~80-90% bandwidth reduction (also blocks CSS)
+2. **Third-Party Blocking**: Use `block_third_party=True` with careful `allowed_domains` configuration
+3. **Measure First**: Run with `measure_network=True` to understand baseline usage before optimization
+4. **Trade-offs**: Ultra mode may break some sites; test thoroughly before production use
 
 ## Migration from v1.x
 
@@ -386,9 +631,9 @@ from servbot import fetch_verification_codes
 ```
 
 Internal imports have changed:
-- `servbot.code_parser` �?`servbot.parsers`
-- `servbot.imap_client` �?`servbot.clients`
-- `servbot.db` �?`servbot.data`
+- `servbot.code_parser` �?`servbot.parsers`
+- `servbot.imap_client` �?`servbot.clients`
+- `servbot.db` �?`servbot.data`
 
 ## Contributing
 
@@ -402,6 +647,14 @@ Servbot follows Google Python Style Guide:
 ## License
 
 [Specify your license here]
+
+## Additional Documentation
+
+- **[CLI Guide](docs/CLI_GUIDE.md)**: Complete interactive CLI documentation
+- **[Quickstart Guide](docs/QUICKSTART.md)**: Get started quickly with common use cases
+- **[Proxy System](docs/PROXIES.md)**: Comprehensive proxy configuration and usage guide
+- **[Browser Automation](docs/BROWSER_AUTOMATION.md)**: Detailed browser automation documentation (NEW!)
+- **[Network Metering](docs/NETWORK_METERING.md)**: Traffic measurement and optimization guide (NEW!)
 
 ## Support
 

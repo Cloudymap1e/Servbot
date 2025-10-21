@@ -16,9 +16,11 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
+from urllib.parse import urlparse
 
 from ..core.models import EmailAccount
 from ..core import verification as core_verification
+from .netmeter import NetworkMeter
 
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
@@ -48,11 +50,12 @@ class RegistrationResult:
 class ActionHelper:
     """Helper to perform actions with debug screenshots and red-outline highlights."""
 
-    def __init__(self, page, debug_dir: str, on_activity: Optional[Callable[[], None]] = None):
+    def __init__(self, page, debug_dir: str, on_activity: Optional[Callable[[], None]] = None, *, enable_screenshots: bool = True):
         self.page = page
         self.debug_dir = debug_dir
         self.artifacts: List[str] = []
         self._on_activity = on_activity
+        self._enable_screenshots = enable_screenshots
         self._ensure_dir()
         self._install_highlight_css()
 
@@ -102,6 +105,9 @@ class ActionHelper:
 
     def screenshot(self, label: str) -> str:
         path = os.path.join(self.debug_dir, f"{int(time.time()*1000)}_{label}.png")
+        if not self._enable_screenshots:
+            # Do not create screenshots to avoid extra disk/network overhead during measurements
+            return path
         try:
             self.page.screenshot(path=path, full_page=True)
             self.artifacts.append(path)
@@ -167,6 +173,12 @@ class BrowserBot:
         has_touch: bool = False,
         locale: Optional[str] = "en-US",
         idle_timeout_sec: int = 10,
+        # Traffic controls
+        traffic_profile: Optional[str] = None,  # None/off|minimal|ultra
+        block_third_party: bool = False,
+        allowed_domains: Optional[List[str]] = None,
+        measure_network: bool = False,
+        disable_debug_artifacts: bool = False,
     ):
         self.headless = headless
         self.user_data_dir = user_data_dir
@@ -186,6 +198,17 @@ class BrowserBot:
         ts = time.strftime("%Y%m%d-%H%M%S")
         self.session_debug_dir = os.path.join(base, f"run-{ts}-{uuid.uuid4().hex[:6]}")
         os.makedirs(self.session_debug_dir, exist_ok=True)
+        # Traffic settings
+        self.traffic_profile = (traffic_profile or "off").lower()
+        self.block_third_party = bool(block_third_party)
+        self.allowed_domains = [d.lower() for d in (allowed_domains or [])]
+        self.measure_network = bool(measure_network)
+        self.disable_debug_artifacts = bool(disable_debug_artifacts)
+        self._blocked_counters = {"images": 0, "fonts": 0, "media": 0, "stylesheets": 0, "third_party": 0, "analytics": 0}
+        # Apply Chromium arg to disable image decoding at renderer level in minimal/ultra
+        if self.traffic_profile in ("minimal", "ultra"):
+            if "--blink-settings=imagesEnabled=false" not in self.args:
+                self.args.append("--blink-settings=imagesEnabled=false")
 
     def _screenshot_on_error(self, page, label: str = "error") -> Optional[str]:
         try:
@@ -231,6 +254,10 @@ class BrowserBot:
             def _touch():
                 nonlocal last_activity
                 last_activity = time.time()
+            # Ensure Save-Data header in minimal/ultra
+            if self.traffic_profile in ("minimal", "ultra"):
+                self.extra_headers = self.extra_headers or {}
+                self.extra_headers["Save-Data"] = "on"
             launch_kwargs = dict(
                 user_data_dir=user_dir,
                 headless=self.headless,
@@ -268,6 +295,104 @@ class BrowserBot:
                         proxy=self.proxy,
                     )
             page = context.new_page()
+            # Ensure headers set even if context ignored launch extra headers
+            try:
+                if self.extra_headers:
+                    context.set_extra_http_headers(self.extra_headers)
+            except Exception:
+                pass
+            # Request routing for minimal traffic
+            if self.traffic_profile in ("minimal", "ultra") or self.block_third_party:
+                # Default allowlist for Reddit when not provided
+                try:
+                    entry_host = urlparse(getattr(flow, "entry_url", "") or "").hostname or ""
+                except Exception:
+                    entry_host = ""
+                if self.block_third_party and not self.allowed_domains:
+                    if "reddit" in entry_host:
+                        self.allowed_domains = [
+                            "reddit.com",
+                            "redditstatic.com",
+                            "redditmedia.com",
+                            "redd.it",
+                        ]
+                    elif entry_host:
+                        base = entry_host.split(".")[-2:]
+                        self.allowed_domains = [".".join(base)]
+                analytics_domains = {
+                    "googletagmanager.com",
+                    "google-analytics.com",
+                    "doubleclick.net",
+                    "g.doubleclick.net",
+                    "sentry.io",
+                    "newrelic.com",
+                    "datadoghq.com",
+                    "intercom.io",
+                    "hotjar.com",
+                    "braze.com",
+                    "branch.io",
+                    "amplitude.com",
+                    "segment.io",
+                    "mixpanel.com",
+                    "facebook.net",
+                    "facebook.com",
+                    # Reddit first-party telemetry/reporting hosts
+                    "w3-reporting.reddit.com",
+                    "error-tracking.reddit.com",
+                    "events.reddit.com",
+                    "pixel.reddit.com",
+                }
+                def _host_allowed(url: str) -> bool:
+                    if not self.block_third_party or not self.allowed_domains:
+                        return True
+                    try:
+                        host = urlparse(url).hostname or ""
+                    except Exception:
+                        host = ""
+                    host = host.lower()
+                    for d in self.allowed_domains:
+                        d = d.lstrip(".").lower()
+                        if host.endswith(d):
+                            return True
+                    return False
+                def _is_analytics(url: str) -> bool:
+                    try:
+                        host = urlparse(url).hostname or ""
+                    except Exception:
+                        host = ""
+                    host = host.lower()
+                    return any(host.endswith(d) for d in analytics_domains)
+                def _route_handler(route, request):
+                    try:
+                        rtype = (request.resource_type or "other").lower()
+                        url = request.url
+                        if rtype in ("image", "font", "media", "ping"):
+                            if rtype == "image":
+                                self._blocked_counters["images"] += 1
+                            elif rtype == "font":
+                                self._blocked_counters["fonts"] += 1
+                            else:
+                                self._blocked_counters["media"] += 1
+                            return route.abort()
+                        if self.traffic_profile == "ultra" and rtype == "stylesheet":
+                            self._blocked_counters["stylesheets"] += 1
+                            return route.abort()
+                        if not _host_allowed(url):
+                            self._blocked_counters["third_party"] += 1
+                            return route.abort()
+                        if _is_analytics(url):
+                            self._blocked_counters["analytics"] += 1
+                            return route.abort()
+                        return route.fallback()
+                    except Exception:
+                        try:
+                            return route.fallback()
+                        except Exception:
+                            pass
+                try:
+                    page.route("**/*", _route_handler)
+                except Exception:
+                    pass
             # Stealth init scripts (mask automation hints)
             try:
                 page.add_init_script(
@@ -299,12 +424,72 @@ class BrowserBot:
                     Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
                     """
                 )
+                # Optional traffic minimization JS stubs
+                if self.traffic_profile in ("minimal", "ultra"):
+                    page.add_init_script(
+                        """
+                        (function(){
+                          try {
+                            // Disable sendBeacon to avoid pings
+                            Object.defineProperty(navigator, 'sendBeacon', { writable: true, value: function(){ return false; } });
+                            // Block fetch/XHR to known telemetry/reporting hosts
+                            const BLOCK_RE = /(?:w3-reporting\.reddit\.com|error-tracking\.reddit\.com|sentry\.io)/i;
+                            const _fetch = window.fetch;
+                            window.fetch = function(input, init){
+                              try {
+                                const url = (typeof input === 'string') ? input : (input && input.url) || '';
+                                if (BLOCK_RE.test(url)) {
+                                  return Promise.resolve(new Response('', {status: 204}));
+                                }
+                              } catch(e) {}
+                              return _fetch.apply(this, arguments);
+                            };
+                            const _open = XMLHttpRequest.prototype.open;
+                            XMLHttpRequest.prototype.open = function(method, url){
+                              try {
+                                if (BLOCK_RE.test(String(url))) {
+                                  // Abort immediately
+                                  this.abort();
+                                  return;
+                                }
+                              } catch(e) {}
+                              return _open.apply(this, arguments);
+                            };
+                            // Remove prefetch/preload hints dynamically
+                            new MutationObserver(function(list){
+                              list.forEach(function(m){
+                                m.addedNodes && m.addedNodes.forEach(function(n){
+                                  try {
+                                    if (n && n.tagName === 'LINK'){
+                                      const rel = (n.getAttribute('rel')||'').toLowerCase();
+                                      if (rel === 'prefetch' || rel === 'preload' || rel === 'modulepreload'){
+                                        n.parentNode && n.parentNode.removeChild(n);
+                                      }
+                                    }
+                                  } catch(e) {}
+                                });
+                              });
+                            }).observe(document.documentElement, {childList:true, subtree:true});
+                          } catch(e) {}
+                        })();
+                        """
+                    )
             except Exception:
                 pass
             # Cap step timeout to 10s per user requirement
             page.set_default_timeout(10000)
 
-            actions = ActionHelper(page, self.session_debug_dir, on_activity=_touch)
+            actions = ActionHelper(page, self.session_debug_dir, on_activity=_touch, enable_screenshots=(not self.disable_debug_artifacts))
+
+            # Network metering
+            meter = None
+            net_json_path = None
+            if self.measure_network:
+                try:
+                    meter = NetworkMeter(profile_name=self.traffic_profile, allowlist=self.allowed_domains)
+                    meter.start(page)
+                except Exception:
+                    meter = None
 
             try:
                 result = flow.perform_registration(
@@ -315,6 +500,19 @@ class BrowserBot:
                     timeout_sec,
                     prefer_link,
                 )
+                # Stop meter after flow finishes
+                if meter:
+                    try:
+                        meter.stop()
+                        meter.set_blocked_counters(self._blocked_counters)
+                        # Save JSON artifact under data/network
+                        net_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "network"))
+                        os.makedirs(net_base, exist_ok=True)
+                        net_json_path = os.path.join(net_base, f"{int(time.time()*1000)}_net_{self.traffic_profile or 'off'}.json")
+                        meter.save_json(net_json_path)
+                        actions.artifacts.append(net_json_path)
+                    except Exception:
+                        pass
                 # Capture storage/cookies/user agent
                 try:
                     storage_state = context.storage_state()
@@ -350,6 +548,21 @@ class BrowserBot:
                     service_password=None,
                 )
             finally:
+                # Best-effort meter stop/save if an exception occurred above
+                try:
+                    if meter and not net_json_path:
+                        try:
+                            meter.stop()
+                            meter.set_blocked_counters(self._blocked_counters)
+                            net_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "network"))
+                            os.makedirs(net_base, exist_ok=True)
+                            net_json_path = os.path.join(net_base, f"{int(time.time()*1000)}_net_{self.traffic_profile or 'off'}.json")
+                            meter.save_json(net_json_path)
+                            actions.artifacts.append(net_json_path)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                 try:
                     context.close()
                 except Exception:

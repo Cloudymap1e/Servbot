@@ -166,11 +166,13 @@ class ServbotCLI:
         print("  cards default <alias> - Set default card alias")
         print("  cards balance         - Refresh and display balances for all cards")
         print("\nBrowser Automation:")
-        print("  register <service> --url <signup_url> [--email <mailbox>|--provision <outlook|hotmail>] ")
+        print("  register <service> --url <signup_url> [--email <mailbox>|--provision outlook|hotmail] ")
         print("                         [--headed|--headless] [--timeout <sec>] [--prefer-code|--prefer-link]")
         print("                         [--config <selectors.json>] [--user-data-dir <path>] ")
         print("                         [--email-selector <css>] [--password-selector <css>] ")
         print("                         [--submit-selector <css>] [--otp-selector <css>] [--success-selector <css>]")
+        print("                         [--measure-net] [--traffic-profile minimal|ultra] ")
+        print("                         [--block-third-party|--no-block-third-party] [--allow-domains d1,d2]")
         print("\nGeneral:")
         print("  help                  - Show this help message")
         print("  exit/quit             - Exit the program")
@@ -517,6 +519,11 @@ class ServbotCLI:
         # Quick selector overrides
         quick_cfg = {}
         use_db_proxy = False
+        # Network/traffic minimization flags
+        measure_net = False
+        traffic_profile = None
+        block_third_party = False
+        allow_domains = None
 
         i = 1
         while i < len(args):
@@ -547,6 +554,16 @@ class ServbotCLI:
                 user_data_dir = args[i+1]; i += 2; continue
             if a == "--use-db-proxy":
                 use_db_proxy = True; i += 1; continue
+            if a == "--measure-net":
+                measure_net = True; i += 1; continue
+            if a == "--traffic-profile" and i + 1 < len(args):
+                traffic_profile = args[i+1]; i += 2; continue
+            if a == "--block-third-party":
+                block_third_party = True; i += 1; continue
+            if a == "--no-block-third-party":
+                block_third_party = False; i += 1; continue
+            if a == "--allow-domains" and i + 1 < len(args):
+                allow_domains = [s.strip() for s in args[i+1].split(',') if s.strip()]; i += 2; continue
             # Quick selectors
             if a == "--email-selector" and i + 1 < len(args):
                 quick_cfg['email_input'] = args[i+1]; i += 2; continue
@@ -613,6 +630,10 @@ class ServbotCLI:
             flow_config=flow_config,
             user_data_dir=user_data_dir,
             proxy=proxy_dict,
+            traffic_profile=traffic_profile,
+            block_third_party=block_third_party,
+            allowed_domains=allow_domains,
+            measure_network=measure_net,
         )
         if not result:
             print("Registration failed")

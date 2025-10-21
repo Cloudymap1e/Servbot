@@ -1,0 +1,67 @@
+{
+  "profile": {
+    "traffic_profile": "ultra",
+    "allowed_domains": [
+      "reddit.com",
+      "redditstatic.com",
+      "redditmedia.com",
+      "redd.it"
+    ]
+  },
+  "totals": {
+    "encoded_bytes": 346716,
+    "requests": 63
+  },
+  "per_type": {
+    "preflight": {
+      "bytes": 0,
+      "requests": 29
+    },
+    "document": {
+      "bytes": 70622,
+      "requests": 1
+    },
+    "script": {
+      "bytes": 257880,
+      "requests": 26
+    },
+    "fetch": {
+      "bytes": 18214,
+      "requests": 7
+    }
+  },
+  "per_domain": {
+    "www.redditstatic.com": {
+      "bytes": 257880,
+      "requests": 52
+    },
+    "www.reddit.com": {
+      "bytes": 88836,
+      "requests": 8
+    },
+    "w3-reporting.reddit.com": {
+      "bytes": 0,
+      "requests": 1
+    },
+    "o418887.ingest.sentry.io": {
+      "bytes": 0,
+      "requests": 1
+    },
+    "error-tracking.reddit.com": {
+      "bytes": 0,
+      "requests": 1
+    }
+  },
+  "blocked": {
+    "images": 0,
+    "fonts": 0,
+    "media": 0,
+    "stylesheets": 0,
+    "third_party": 4,
+    "analytics": 2
+  },
+  "timings": {
+    "meter_start": 1761050930.694247,
+    "meter_stop": 1761051199.620259
+  }
+}
