@@ -244,19 +244,29 @@ class BrowserBot:
                 args=self.args,
                 extra_http_headers=self.extra_headers,
             )
+            # Support both real Playwright (property) and test double (method)
+            chromium_obj = p.chromium if not callable(getattr(p, "chromium", None)) else p.chromium()
             if self.channel:
-                context = p.chromium.launch_persistent_context(channel=self.channel, **launch_kwargs)
+                context = chromium_obj.launch_persistent_context(channel=self.channel, **launch_kwargs)
             else:
                 # Playwright's signature expects user_data_dir as first positional
-                context = p.chromium.launch_persistent_context(
-                    user_dir,
-                    headless=self.headless,
-                    proxy=self.proxy,
-                    viewport={"width": 1280, "height": 900},
-                    accept_downloads=True,
-                    user_agent=self.user_agent,
-                    args=self.args,
-                )
+                try:
+                    context = chromium_obj.launch_persistent_context(
+                        user_dir,
+                        headless=self.headless,
+                        proxy=self.proxy,
+                        viewport={"width": 1280, "height": 900},
+                        accept_downloads=True,
+                        user_agent=self.user_agent,
+                        args=self.args,
+                    )
+                except TypeError:
+                    # Fallback for simplified test doubles
+                    context = chromium_obj.launch_persistent_context(
+                        user_dir,
+                        headless=self.headless,
+                        proxy=self.proxy,
+                    )
             page = context.new_page()
             # Stealth init scripts (mask automation hints)
             try:

@@ -500,6 +500,7 @@ class ServbotCLI:
                            [--submit-selector CSS]
                            [--otp-selector CSS]
                            [--success-selector CSS]
+                           [--use-db-proxy]
         """
         if not args:
             print("Usage: register SERVICE --url URL [--email MAILBOX | --provision outlook|hotmail]")
@@ -517,6 +518,7 @@ class ServbotCLI:
         user_data_dir = None
         # Quick selector overrides
         quick_cfg = {}
+        use_db_proxy = False
 
         i = 1
         while i < len(args):
@@ -545,6 +547,8 @@ class ServbotCLI:
                 config_path = args[i+1]; i += 2; continue
             if a == "--user-data-dir" and i + 1 < len(args):
                 user_data_dir = args[i+1]; i += 2; continue
+            if a == "--use-db-proxy":
+                use_db_proxy = True; i += 1; continue
             # Quick selectors
             if a == "--email-selector" and i + 1 < len(args):
                 quick_cfg['email_input'] = args[i+1]; i += 2; continue
@@ -588,6 +592,17 @@ class ServbotCLI:
         # Call API orchestration
         from servbot.api import register_service_account
 
+        # Optional proxy from DB
+        proxy_dict = None
+        if use_db_proxy:
+            try:
+                from servbot.proxy.bridge import get_playwright_proxy_from_db
+                proxy_dict = get_playwright_proxy_from_db(only_working=True)
+                if not proxy_dict:
+                    print("[warn] No working proxies found in DB; proceeding without proxy")
+            except Exception as e:
+                print(f"[warn] Failed to load proxy from DB: {e}")
+
         result = register_service_account(
             service=service,
             website_url=url,
@@ -599,6 +614,7 @@ class ServbotCLI:
             prefer_link=prefer_link,
             flow_config=flow_config,
             user_data_dir=user_data_dir,
+            proxy=proxy_dict,
         )
         if not result:
             print("Registration failed")
