@@ -96,8 +96,7 @@ def provision_flashmail_account(
             return None
         
         account = accounts[0]
-        imap_server = FlashmailClient.infer_imap_server(account.email)
-        
+
         # Save complete account credentials (email, password, refresh_token, client_id)
         # All credentials are stored together in the accounts table
         # Use update_only_if_provided=False to ensure all fields are set
@@ -107,23 +106,19 @@ def provision_flashmail_account(
             type=account.account_type,
             source="flashmail",
             card=card,
-            imap_server=imap_server,
             refresh_token=account.refresh_token,
             client_id=account.client_id,
             update_only_if_provided=False,  # Allow direct updates
         )
-        
-        # Fetch verification
-        # Prefer Graph API if credentials are available, fallback to IMAP
+
+        # Fetch verification via Microsoft Graph API
         value = get_verification_for_service(
             target_service=target_service,
-            imap_server=imap_server,
             username=account.email,
-            password=account.password,
             timeout_seconds=timeout_seconds,
             poll_interval_seconds=poll_interval_seconds,
             prefer_link=prefer_link,
-            prefer_graph=True,  # Try Graph API first since we just saved Graph credentials
+            prefer_graph=True,
         )
         
         if not value:
@@ -353,7 +348,6 @@ def register_service_account(
                 type=acct.account_type,
                 source="flashmail",
                 card=card,
-                imap_server=FlashmailClient.infer_imap_server(acct.email),
                 refresh_token=acct.refresh_token,
                 client_id=acct.client_id,
                 update_only_if_provided=False,
@@ -363,7 +357,6 @@ def register_service_account(
                 password=acct.password,
                 account_type=acct.account_type,
                 source="flashmail",
-                imap_server=FlashmailClient.infer_imap_server(acct.email),
                 refresh_token=acct.refresh_token,
                 client_id=acct.client_id,
             )
@@ -382,7 +375,6 @@ def register_service_account(
                 password=acc.get('password', ''),
                 account_type=acc.get('type', 'other'),
                 source=acc.get('source', 'manual'),
-                imap_server=acc.get('imap_server'),
                 refresh_token=acc.get('refresh_token'),
                 client_id=acc.get('client_id'),
             )

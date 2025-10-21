@@ -1,0 +1,394 @@
+{
+  "label": "proxifier-current",
+  "test_url": "https://httpbin.org/ip",
+  "timeout": 5,
+  "max_workers": 2,
+  "baseline_ip": "196.251.73.140",
+  "summary": {
+    "tested": 38,
+    "success": 21,
+    "failed": 17
+  },
+  "results": [
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "feDzDLCT",
+      "success": false,
+      "status_code": 502,
+      "response_time_ms": 2899.6064999955706,
+      "response_ip": null,
+      "error": "HTTP 502"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "5BJ18zsv",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5644.006700000318,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Max retries exceeded with url: /ip (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "6iztzK4d",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 3446.016399997461,
+      "response_ip": "76.216.246.88",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "XYZ789",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2389.9621999953524,
+      "response_ip": "216.222.181.147",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "ABC123",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 5125.27019999834,
+      "response_ip": "174.175.21.114",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "DEF456",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2277.757500000007,
+      "response_ip": "137.118.180.178",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "GHI012",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2460.2703000055044,
+      "response_ip": "172.56.161.26",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "MNO678",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 3159.7603999980493,
+      "response_ip": "47.152.29.178",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "JKL345",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 6052.300099996501,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "PQR901",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2062.65269999858,
+      "response_ip": "162.239.76.236",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "BwKSYmdm",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2016.7025000046124,
+      "response_ip": "162.201.3.46",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "16CajDSJ",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 3459.3292999998084,
+      "response_ip": "135.134.138.214",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "GuPnZGGz",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 3036.056999997527,
+      "response_ip": "216.126.35.56",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "7avtydlI",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2411.228299999493,
+      "response_ip": "66.229.170.9",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "3wq3omeQ",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2754.6628000054625,
+      "response_ip": "73.121.221.108",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "gfwTfPSA",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 6151.041199998872,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "mhXkw9e6",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5954.390300001251,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "9ZtSoQ9U",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5676.730599996517,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Max retries exceeded with url: /ip (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "WrUTum4e",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2130.688099998224,
+      "response_ip": "73.155.252.223",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "3bwijDbq",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 3573.8007000036305,
+      "response_ip": "199.123.1.105",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "GGnrMFtr",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 3432.848299999023,
+      "response_ip": "67.197.184.48",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "INMK6T46",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 3068.358700002136,
+      "response_ip": "76.238.242.148",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "BXj4Ay3K",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5953.671899995243,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "t3T5Ig3q",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5560.6243000002,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Max retries exceeded with url: /ip (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "OZ7tapqU",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 6031.444399995962,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "WnD9KN5u",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 6042.761099997733,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "7Ibn7vR8",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2159.7804999983055,
+      "response_ip": "108.208.175.148",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "0jknuMyN",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2377.646699998877,
+      "response_ip": "72.73.227.215",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "uHJajIUY",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2837.3323999985587,
+      "response_ip": "98.21.215.53",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "YI8fqOmD",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5921.594900006312,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "pIX3Tlzu",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5946.501099999296,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "K8o9Carv",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5115.621600001759,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Max retries exceeded with url: /ip (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "YXRvX76q",
+      "success": false,
+      "status_code": 502,
+      "response_time_ms": 2565.794999994978,
+      "response_ip": null,
+      "error": "HTTP 502"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "9GjFQnbj",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5907.057899996289,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Read timed out. (read timeout=5)"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "CSqvnWBc",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2413.185199999134,
+      "response_ip": "208.102.24.196",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "mO9fxNkW",
+      "success": true,
+      "status_code": 200,
+      "response_time_ms": 2321.8734999973094,
+      "response_ip": "68.98.227.44",
+      "error": null
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "FP9taPZy",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5499.272200002451,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Max retries exceeded with url: /ip (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))"
+    },
+    {
+      "host": "us.mooproxy.net:55688",
+      "provider": "mooproxy",
+      "session": "ZkOpiBYN",
+      "success": false,
+      "status_code": null,
+      "response_time_ms": 5508.916599996155,
+      "response_ip": null,
+      "error": "HTTPSConnectionPool(host='httpbin.org', port=443): Max retries exceeded with url: /ip (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))"
+    }
+  ]
+}

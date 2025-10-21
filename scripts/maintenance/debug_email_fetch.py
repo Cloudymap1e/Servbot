@@ -35,11 +35,10 @@ def debug_email_fetch(email_address):
     print(f"  Password: {'*' * 10} (length: {len(account.get('password', ''))})")
     print(f"  Type: {account['type']}")
     print(f"  Source: {account['source']}")
-    print(f"  IMAP Server: {account.get('imap_server', 'N/A')}")
     print(f"  Has Refresh Token: {bool(account.get('refresh_token'))}")
     print(f"  Has Client ID: {bool(account.get('client_id'))}")
     
-    # Step 2: Try Graph API
+    # Step 2: Try Microsoft Graph API
     print("\n" + "=" * 80)
     print("STEP 2: Testing Microsoft Graph API")
     print("=" * 80)
@@ -84,60 +83,9 @@ def debug_email_fetch(email_address):
     else:
         print("[WARN] No Graph API credentials available, skipping")
     
-    # Step 3: Try IMAP
+    # Step 3: Check database messages
     print("\n" + "=" * 80)
-    print("STEP 3: Testing IMAP Connection")
-    print("=" * 80)
-    
-    password = account.get('password')
-    imap_server = account.get('imap_server', 'outlook.office365.com')
-    
-    if password:
-        try:
-            from servbot.clients import IMAPClient
-            
-            print(f"Attempting IMAP connection to {imap_server}...")
-            client = IMAPClient(
-                server=imap_server,
-                username=email_address,
-                password=password,
-                port=993,
-                ssl=True
-            )
-            
-            print("[OK] IMAP client created and connected")
-            
-            # Try to fetch messages
-            print("Fetching messages via IMAP...")
-            messages = client.fetch_messages(
-                folder='INBOX',
-                unseen_only=False,
-                limit=20
-            )
-            
-            print(f"[OK] Fetched {len(messages)} messages via IMAP")
-            
-            if messages:
-                print("\nMessages fetched:")
-                for i, msg in enumerate(messages[:5], 1):
-                    print(f"\n{i}. Subject: {msg.subject}")
-                    print(f"   From: {msg.from_addr}")
-                    print(f"   Date: {msg.received_date}")
-                    body_preview = (msg.body_text or msg.body_html or '')[:100]
-                    print(f"   Body Preview: {body_preview}...")
-            else:
-                print("[WARN] No messages returned from IMAP")
-                
-        except Exception as e:
-            print(f"[ERROR] IMAP failed: {e}")
-            import traceback
-            traceback.print_exc()
-    else:
-        print("[ERROR] No password available for IMAP")
-    
-    # Step 4: Check database messages
-    print("\n" + "=" * 80)
-    print("STEP 4: Checking Database Messages")
+    print("STEP 3: Checking Database Messages")
     print("=" * 80)
     
     conn = _connect()
@@ -164,19 +112,17 @@ def debug_email_fetch(email_address):
         print("[WARN] No messages found in database")
         print("This suggests messages are not being saved/fetched at all")
     
-    # Step 5: Test verification code extraction
+    # Step 4: Test verification code extraction
     print("\n" + "=" * 80)
-    print("STEP 5: Testing Verification Code Extraction")
+    print("STEP 4: Testing Verification Code Extraction")
     print("=" * 80)
     
-    print("Running fetch_verification_codes()...")
+    print("Running fetch_verification_codes() via Microsoft Graph...")
     from servbot import fetch_verification_codes
     
     try:
         verifications = fetch_verification_codes(
-            imap_server=imap_server,
             username=email_address,
-            password=password,
             unseen_only=False,
             limit=50,
             prefer_graph=True,

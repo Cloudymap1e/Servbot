@@ -467,23 +467,21 @@ class ServbotCLI:
             args: Email and password
         """
         if len(args) < 2:
-            print("Usage: add <email> <password> [imap_server]")
+            print("Usage: add <email> <password>")
             return
         
         email = args[0]
         password = args[1]
-        imap_server = args[2] if len(args) > 2 else None
         
         try:
             upsert_account(
                 email=email,
                 password=password,
                 source="manual",
-                imap_server=imap_server,
                 update_only_if_provided=True,  # Use legacy mode for manual adds
             )
             print(f"\nAccount added: {email}")
-            print("Note: Manual accounts use IMAP. To enable Graph API, provide refresh_token and client_id.")
+            print("Manual accounts can use Microsoft Graph when refresh_token and client_id are provided.")
         except Exception as e:
             print(f"Error adding account: {e}")
     
