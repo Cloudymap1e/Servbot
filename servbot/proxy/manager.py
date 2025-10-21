@@ -6,11 +6,13 @@ from .base import ProxyProvider
 from .models import ProviderConfig, ProxyEndpoint
 from .providers.static_list import StaticListProvider
 from .providers.brightdata import BrightDataProvider
+from .providers.mooproxy import MooProxyProvider
 
 
 _PROVIDER_REGISTRY: Dict[str, Type[ProxyProvider]] = {
     "static_list": StaticListProvider,
     "brightdata": BrightDataProvider,
+    "mooproxy": MooProxyProvider,
 }
 
 

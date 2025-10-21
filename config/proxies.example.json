@@ -20,6 +20,26 @@
         "password": "env:BRIGHTDATA_PASSWORD",
         "country": "US"
       }
+    },
+    {
+      "name": "mooproxy-static",
+      "type": "mooproxy",
+      "price_per_gb": 5.0,
+      "options": {
+        "entries": "us.mooproxy.net:55688:specu1:XJrImxWe7O_country-US_session-feDzDLCT\nus.mooproxy.net:55688:specu1:XJrImxWe7O_country-US_session-5BJ18zsv\nus.mooproxy.net:55688:specu1:XJrImxWe7O_country-US_session-6iztzK4d"
+      }
+    },
+    {
+      "name": "mooproxy-dynamic",
+      "type": "mooproxy",
+      "price_per_gb": 5.0,
+      "options": {
+        "host": "us.mooproxy.net",
+        "port": "55688",
+        "username": "specu1",
+        "password": "XJrImxWe7O",
+        "country": "US"
+      }
     }
   ]
 }
