@@ -1,0 +1,73 @@
+{
+  "providers": [
+    {
+      "name": "static-datacenter",
+      "type": "static_list",
+      "price_per_gb": 0.5,
+      "concurrency_limit": 50,
+      "options": {
+        "scheme": "http",
+        "entries": "user:pass@1.2.3.4:8000, 5.6.7.8:9000",
+        "proxy_type": "datacenter",
+        "ip_version": "ipv4",
+        "rotation_type": "sticky"
+      }
+    },
+    {
+      "name": "brightdata-resi",
+      "type": "brightdata",
+      "price_per_gb": 12.0,
+      "concurrency_limit": 100,
+      "options": {
+        "host": "zproxy.lum-superproxy.io",
+        "port": "22225",
+        "username": "env:BRIGHTDATA_USERNAME",
+        "password": "env:BRIGHTDATA_PASSWORD",
+        "country": "US",
+        "proxy_type": "residential",
+        "ip_version": "ipv4"
+      }
+    },
+    {
+      "name": "brightdata-isp",
+      "type": "brightdata",
+      "price_per_gb": 8.0,
+      "concurrency_limit": 50,
+      "options": {
+        "host": "zproxy.lum-superproxy.io",
+        "port": "22225",
+        "username": "env:BRIGHTDATA_ISP_USERNAME",
+        "password": "env:BRIGHTDATA_ISP_PASSWORD",
+        "country": "US",
+        "proxy_type": "isp",
+        "ip_version": "ipv4"
+      }
+    },
+    {
+      "name": "mooproxy-static",
+      "type": "mooproxy",
+      "price_per_gb": 5.0,
+      "concurrency_limit": 20,
+      "options": {
+        "entries": "us.mooproxy.net:55688:specu1:XJrImxWe7O_country-US_session-feDzDLCT\nus.mooproxy.net:55688:specu1:XJrImxWe7O_country-US_session-5BJ18zsv\nus.mooproxy.net:55688:specu1:XJrImxWe7O_country-US_session-6iztzK4d",
+        "proxy_type": "residential",
+        "ip_version": "ipv4"
+      }
+    },
+    {
+      "name": "mooproxy-dynamic",
+      "type": "mooproxy",
+      "price_per_gb": 5.0,
+      "concurrency_limit": 30,
+      "options": {
+        "host": "us.mooproxy.net",
+        "port": "55688",
+        "username": "specu1",
+        "password": "XJrImxWe7O",
+        "country": "US",
+        "proxy_type": "residential",
+        "ip_version": "ipv4"
+      }
+    }
+  ]
+}

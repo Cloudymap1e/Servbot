@@ -1,32 +1,27 @@
 """Servbot - Email verification code extraction system.
 
 Servbot is a comprehensive email automation tool that:
-- Fetches emails via IMAP or Microsoft Graph API
+- Fetches emails via Microsoft Graph API
 - Extracts verification codes and magic links
 - Identifies services using regex patterns and AI
 - Integrates with Flashmail for account provisioning
 
-Basic Usage:
+Basic Usage (Graph-only):
     >>> from servbot import fetch_verification_codes
-    >>> 
     >>> verifications = fetch_verification_codes(
-    ...     imap_server="imap.gmail.com",
-    ...     username="user@gmail.com",
-    ...     password="password"
+    ...     username="user@outlook.com",
+    ...     prefer_graph=True,
     ... )
-    >>> 
     >>> for v in verifications:
     ...     print(v.as_pair())  # <Service, Code>
 
 Advanced Usage:
     >>> from servbot import get_verification_for_service
-    >>> 
     >>> code = get_verification_for_service(
     ...     target_service="GitHub",
-    ...     imap_server="imap.gmail.com",
-    ...     username="user@gmail.com",
-    ...     password="password",
-    ...     timeout_seconds=60
+    ...     username="user@outlook.com",
+    ...     timeout_seconds=60,
+    ...     prefer_graph=True,
     ... )
     >>> print(code)  # 123456 or https://...
 

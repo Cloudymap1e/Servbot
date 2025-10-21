@@ -1,4 +1,4 @@
-"""Email client implementations for different providers."""
+"""Email client implementations for supported providers (Graph-only)."""
 
 from .graph import GraphClient
 from .flashmail import FlashmailClient
