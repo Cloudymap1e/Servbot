@@ -1,0 +1,25 @@
+{
+  "providers": [
+    {
+      "name": "static-us",
+      "type": "static_list",
+      "price_per_gb": 0.0,
+      "options": {
+        "scheme": "http",
+        "entries": "user:pass@1.2.3.4:8000, 5.6.7.8:9000"
+      }
+    },
+    {
+      "name": "brightdata-resi",
+      "type": "brightdata",
+      "price_per_gb": 12.0,
+      "options": {
+        "host": "zproxy.lum-superproxy.io",
+        "port": "22225",
+        "username": "env:BRIGHTDATA_USERNAME",
+        "password": "env:BRIGHTDATA_PASSWORD",
+        "country": "US"
+      }
+    }
+  ]
+}
