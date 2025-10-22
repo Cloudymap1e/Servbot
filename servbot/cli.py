@@ -131,6 +131,8 @@ class ServbotCLI:
             self.cmd_cards(args)
         elif cmd == "register":
             self.cmd_register(args)
+        elif cmd == "register-http":
+            self.cmd_register_http(args)
         else:
             print(f"Unknown command: {cmd}")
             print("Type 'help' for available commands.")
@@ -173,6 +175,9 @@ class ServbotCLI:
         print("                         [--submit-selector <css>] [--otp-selector <css>] [--success-selector <css>]")
         print("                         [--measure-net] [--traffic-profile minimal|ultra] ")
         print("                         [--block-third-party|--no-block-third-party] [--allow-domains d1,d2]")
+        print("\nHTTP-only (no browser):")
+        print("  register-http <service> --url <signup_url> [--email MAILBOX | --provision outlook|hotmail]")
+        print("                [--username <name>] [--password <pass>] [--timeout <sec>] [--no-db-proxy]")
         print("\nGeneral:")
         print("  help                  - Show this help message")
         print("  exit/quit             - Exit the program")
@@ -634,6 +639,83 @@ class ServbotCLI:
             block_third_party=block_third_party,
             allowed_domains=allow_domains,
             measure_network=measure_net,
+        )
+        if not result:
+            print("Registration failed")
+            return
+        print("\n" + "=" * 70)
+        print("REGISTRATION RESULT")
+        print("=" * 70)
+        print(f"Service:         {result['service']}")
+        print(f"Mailbox:         {result['mailbox_email']}")
+        print(f"Service Username:{result.get('service_username', '')}")
+        print(f"Status:          {result['status']}")
+        print(f"Registration ID: {result['registration_id']}")
+        print("=" * 70)
+
+    def cmd_register_http(self, args: List[str]):
+        """Run a HTTP-only registration flow.
+        
+        Usage:
+          register-http SERVICE --url URL [--email MAILBOX | --provision outlook|hotmail]
+                           [--username USERNAME] [--password PASSWORD] [--timeout SEC] [--no-db-proxy]
+        """
+        if not args:
+            print("Usage: register-http SERVICE --url URL [--email MAILBOX | --provision outlook|hotmail]")
+            return
+        service = args[0]
+        # Parse flags
+        url = None
+        mailbox = None
+        provision = None
+        username = None
+        password = None
+        timeout = 300
+        use_db_proxy = True
+
+        i = 1
+        while i < len(args):
+            a = args[i]
+            if a == "--url" and i + 1 < len(args):
+                url = args[i+1]; i += 2; continue
+            if a == "--email" and i + 1 < len(args):
+                mailbox = args[i+1]; i += 2; continue
+            if a == "--provision" and i + 1 < len(args):
+                provision = args[i+1]; i += 2; continue
+            if a == "--username" and i + 1 < len(args):
+                username = args[i+1]; i += 2; continue
+            if a == "--password" and i + 1 < len(args):
+                password = args[i+1]; i += 2; continue
+            if a == "--timeout" and i + 1 < len(args):
+                try:
+                    timeout = int(args[i+1])
+                except Exception:
+                    pass
+                i += 2; continue
+            if a == "--no-db-proxy":
+                use_db_proxy = False; i += 1; continue
+            i += 1
+
+        if not url:
+            print("Missing --url")
+            return
+        if not mailbox and not provision:
+            print("Provide --email or --provision outlook|hotmail")
+            return
+
+        # Call API orchestration
+        from servbot.api import register_service_account_http
+
+        result = register_service_account_http(
+            service=service,
+            website_url=url,
+            mailbox_email=mailbox,
+            provision_new=bool(provision),
+            account_type=(provision or 'outlook'),
+            username=username,
+            password=password,
+            timeout_seconds=timeout,
+            use_db_proxy=use_db_proxy,
         )
         if not result:
             print("Registration failed")

@@ -1,0 +1,24 @@
+{
+  "profile": {
+    "traffic_profile": "minimal",
+    "allowed_domains": []
+  },
+  "totals": {
+    "encoded_bytes": 0,
+    "requests": 0
+  },
+  "per_type": {},
+  "per_domain": {},
+  "blocked": {
+    "images": 0,
+    "fonts": 0,
+    "media": 0,
+    "stylesheets": 0,
+    "third_party": 0,
+    "analytics": 0
+  },
+  "timings": {
+    "meter_start": 1761089989.3417492,
+    "meter_stop": 1761090019.67986
+  }
+}

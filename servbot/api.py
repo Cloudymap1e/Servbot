@@ -48,6 +48,7 @@ __all__ = [
 
     # Browser automation
     'register_service_account',
+    'register_service_account_http',
 ]
 
 
@@ -490,3 +491,119 @@ def register_service_account(
             pass
         return None
 
+
+def register_service_account_http(
+    *,
+    service: str,
+    website_url: str,
+    mailbox_email: str,
+    provision_new: bool = False,
+    account_type: str = "outlook",
+    password: str | None = None,
+    username: str | None = None,
+    use_db_proxy: bool = True,
+    timeout_seconds: int = 90,
+    prefer_link: bool = True,
+) -> Optional[Dict[str, any]]:
+    """HTTP-only registration attempt (no browser), proxy-aware.
+
+    - Optionally provisions a new Flashmail mailbox when provision_new is True.
+    - Attempts to submit the first form on the signup page using a browser-like client.
+    - Saves a registration row with minimal artifacts.
+    - Email verification is still handled via Microsoft Graph polling in separate flows.
+    """
+    try:
+        from .automation.http import register_http
+        from .data.database import (
+            get_accounts,
+            upsert_account,
+            save_registration,
+        )
+        proxy_dict = None
+        if use_db_proxy:
+            try:
+                from .proxy.bridge import get_requests_proxies_from_db
+                proxy_dict = get_requests_proxies_from_db(only_working=True)
+            except Exception:
+                proxy_dict = None
+
+        # Determine mailbox
+        email_val: str | None = None
+        password_val: str | None = password
+        username_val: str | None = username
+        if provision_new:
+            from .clients.flashmail import FlashmailClient
+            from .config import load_flashmail_card
+            card = load_flashmail_card()
+            if not card:
+                return None
+            client = FlashmailClient(card)
+            accts = client.fetch_accounts(quantity=1, account_type=account_type)
+            if not accts:
+                return None
+            acct = accts[0]
+            upsert_account(
+                email=acct.email,
+                password=acct.password,
+                type=acct.account_type,
+                source="flashmail",
+                card=card,
+                refresh_token=acct.refresh_token,
+                client_id=acct.client_id,
+                update_only_if_provided=False,
+            )
+            email_val = acct.email
+            password_val = password_val or acct.password
+        else:
+            email_val = mailbox_email
+            # best-effort: fetch stored password if not provided
+            if not password_val:
+                try:
+                    for a in get_accounts():
+                        if a['email'].lower() == email_val.lower():
+                            password_val = a.get('password') or password_val
+                            break
+                except Exception:
+                    pass
+
+        if not email_val:
+            return None
+
+        ok, detail = register_http(
+            service=service,
+            website_url=website_url,
+            mailbox_email=email_val,
+            password=password_val,
+            username=username_val,
+            proxies=proxy_dict,
+            prefer_link=prefer_link,
+            timeout_seconds=timeout_seconds,
+        )
+
+        reg_id = save_registration(
+            service=service,
+            website_url=website_url,
+            mailbox_email=email_val,
+            service_username=username_val or "",
+            service_password=password_val or "",
+            status="success" if ok else "failed",
+            error="" if ok else detail,
+            cookies_json="",
+            storage_state_json="",
+            user_agent="",
+            profile_dir="",
+            debug_dir="",
+            artifacts_json="",
+        )
+
+        return {
+            "registration_id": reg_id,
+            "service": service,
+            "website_url": website_url,
+            "mailbox_email": email_val,
+            "service_username": username_val or email_val,
+            "status": "success" if ok else "failed",
+            "detail": detail,
+        }
+    except Exception:
+        return None

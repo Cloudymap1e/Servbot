@@ -476,8 +476,11 @@ class BrowserBot:
                     )
             except Exception:
                 pass
-            # Cap step timeout to 10s per user requirement
-            page.set_default_timeout(10000)
+            # Honor configured default timeout (seconds -> ms)
+            try:
+                page.set_default_timeout(max(1000, int(self.default_timeout * 1000)))
+            except Exception:
+                page.set_default_timeout(10000)
 
             actions = ActionHelper(page, self.session_debug_dir, on_activity=_touch, enable_screenshots=(not self.disable_debug_artifacts))
 
